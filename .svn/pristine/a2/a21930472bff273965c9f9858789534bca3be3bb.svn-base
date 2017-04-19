@@ -1,0 +1,139 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+
+public class ScoreBoard : MonoBehaviour {
+    public Board board;
+    private static bool largestArmyInPlay = false;
+    private static bool longestRoadInPlay = false;
+    private static int largestArmyOwnedBy;
+    private static int longestRoadOwnedBy;
+
+    public void SettlementPointScored(int player)
+    {
+        int settlementCount = int.Parse(GameObject.Find("Settlement P" + player).GetComponent<Text>().text);
+        int totalCount = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+        settlementCount++;
+        totalCount++;
+        GameObject.Find("Settlement P" + player).GetComponent<Text>().text = settlementCount.ToString();
+        GameObject.Find("Total P" + player).GetComponent<Text>().text = totalCount.ToString();
+    }
+
+    public void CityPointScored(int player)
+    {
+        int cityCount = int.Parse(GameObject.Find("City P" + player).GetComponent<Text>().text);
+        int settlementCount = int.Parse(GameObject.Find("Settlement P" + player).GetComponent<Text>().text);
+        int totalCount = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+        cityCount++;
+        settlementCount--;
+        totalCount++;
+        GameObject.Find("City P" + player).GetComponent<Text>().text = cityCount.ToString();
+        GameObject.Find("Settlement P" + player).GetComponent<Text>().text = settlementCount.ToString();
+        GameObject.Find("Total P" + player).GetComponent<Text>().text = totalCount.ToString();
+    }
+
+    public void KnightCardUsed(int player)
+    {
+        int knightCount = int.Parse(GameObject.Find("Knights P" + player).GetComponent<Text>().text);
+        knightCount++;
+        GameObject.Find("Knights P" + player).GetComponent<Text>().text = knightCount.ToString();
+
+        if (knightCount >= 3)
+        {
+            if (largestArmyInPlay)
+            {
+                if (player != largestArmyOwnedBy)
+                {
+                    int largestKnightCount = int.Parse(GameObject.Find("Knights P" + largestArmyOwnedBy).GetComponent<Text>().text);
+                    if (knightCount > largestKnightCount)
+                    {
+                        int totalCount = int.Parse(GameObject.Find("Total P" + largestArmyOwnedBy).GetComponent<Text>().text);
+                        totalCount = totalCount - 2;
+                        GameObject.Find("Total P" + largestArmyOwnedBy).GetComponent<Text>().text = totalCount.ToString();
+                        GameObject.Find("Knights P" + largestArmyOwnedBy).GetComponent<Text>().fontStyle = FontStyle.Normal;
+
+                        largestArmyOwnedBy = player;
+                        totalCount = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+                        totalCount = totalCount + 2;
+                        GameObject.Find("Total P" + player).GetComponent<Text>().text = totalCount.ToString();
+                        GameObject.Find("Knights P" + player).GetComponent<Text>().fontStyle = FontStyle.BoldAndItalic;
+                    }
+                }
+            }
+            else
+            {
+                largestArmyInPlay = true;
+                largestArmyOwnedBy = player;
+                int totalCount = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+                totalCount = totalCount + 2;
+                GameObject.Find("Total P" + player).GetComponent<Text>().text = totalCount.ToString();
+                GameObject.Find("Knights P" + player).GetComponent<Text>().fontStyle = FontStyle.BoldAndItalic;
+            }
+        }
+    }
+
+    public void RoadPlaced(int player)
+    {
+        int longestRoadForPlayer = board.GetLongestRoad(player);
+        GameObject.Find("Roads P" + player).GetComponent<Text>().text = longestRoadForPlayer.ToString();
+
+        if (longestRoadForPlayer >= 5)
+        {
+            if (longestRoadInPlay)
+            {
+                if (player != longestRoadOwnedBy)
+                {
+                    int longestRoadCount = int.Parse(GameObject.Find("Roads P" + longestRoadOwnedBy).GetComponent<Text>().text);
+                    if (longestRoadForPlayer > longestRoadCount)
+                    {
+                        int totalCount = int.Parse(GameObject.Find("Total P" + longestRoadOwnedBy).GetComponent<Text>().text);
+                        totalCount = totalCount - 2;
+                        GameObject.Find("Total P" + longestRoadOwnedBy).GetComponent<Text>().text = totalCount.ToString();
+                        GameObject.Find("Roads P" + longestRoadOwnedBy).GetComponent<Text>().fontStyle = FontStyle.Normal;
+
+                        longestRoadOwnedBy = player;
+                        totalCount = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+                        totalCount = totalCount + 2;
+                        GameObject.Find("Total P" + player).GetComponent<Text>().text = totalCount.ToString();
+                        GameObject.Find("Roads P" + player).GetComponent<Text>().fontStyle = FontStyle.BoldAndItalic;
+                    }
+                }
+            }
+            else
+            {
+                longestRoadInPlay = true;
+                longestRoadOwnedBy = player;
+                int totalCount = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+                totalCount = totalCount + 2;
+                GameObject.Find("Total P" + player).GetComponent<Text>().text = totalCount.ToString();
+                GameObject.Find("Roads P" + player).GetComponent<Text>().fontStyle = FontStyle.BoldAndItalic;
+            }
+        }
+    }
+
+    public void VictoryPointCardUsed(int player)
+    {
+        int vpCardCount = int.Parse(GameObject.Find("Victory card P" + player).GetComponent<Text>().text);
+        int totalCount = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+        vpCardCount++;
+        totalCount++;
+        GameObject.Find("Victory card P" + player).GetComponent<Text>().text = vpCardCount.ToString();
+        GameObject.Find("Total P" + player).GetComponent<Text>().text = totalCount.ToString();
+    }
+
+    public static int[] GetPlayerStats(int player)
+    {
+        int[] stats = new int[8];
+        stats[0] = int.Parse(GameObject.Find("Settlement P" + player).GetComponent<Text>().text);
+        stats[1] = int.Parse(GameObject.Find("City P" + player).GetComponent<Text>().text);
+        stats[2] = int.Parse(GameObject.Find("Knights P" + player).GetComponent<Text>().text);
+        stats[3] = int.Parse(GameObject.Find("Roads P" + player).GetComponent<Text>().text);
+        stats[4] = int.Parse(GameObject.Find("Victory card P" + player).GetComponent<Text>().text);
+        if(GameObject.Find("Knights P" + player).GetComponent<Text>().fontStyle == FontStyle.BoldAndItalic) { stats[5] = 1; }
+        else { stats[5] = 0; }
+        if (GameObject.Find("Roads P" + player).GetComponent<Text>().fontStyle == FontStyle.BoldAndItalic) { stats[6] = 1; }
+        else { stats[6] = 0; }
+        stats[7] = int.Parse(GameObject.Find("Total P" + player).GetComponent<Text>().text);
+        return stats;
+    }
+}

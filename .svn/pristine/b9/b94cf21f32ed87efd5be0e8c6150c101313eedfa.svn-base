@@ -1,0 +1,85 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+using System.Collections;
+
+public class LevelManager : MonoBehaviour
+{
+    //public float autoLoadNextLevelAfter;
+    //public bool onSplash;
+
+    void Start()
+    {
+        //if (onSplash && autoLoadNextLevelAfter > 0) { Invoke("LoadNextLevel", autoLoadNextLevelAfter); }
+    }
+
+    public void LoadLevel(string name)
+    {
+        Debug.Log("New Level load: " + name);
+        SceneManager.LoadScene(name);
+    }
+
+    public void QuitRequest()
+    {
+        Debug.Log("Quit requested");
+        Application.Quit();
+    }
+
+    public void LoadNextLevel()
+    {
+        SceneManager.LoadScene(Application.loadedLevel + 1);
+    }
+
+    public void LoadPreviousLevel()
+    {
+        SceneManager.LoadScene(Application.loadedLevel - 1);
+    }
+
+    public void SaveBoardSetup()
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            //save terrain tiles
+            string terrain = GameObject.Find("Hex " + i).GetComponent<Image>().sprite.name;
+            PlayerPrefsManager.SetTerrainTile(i, terrain);
+
+            //save tokens
+            string token;
+            if (terrain != "Desert tile")
+            {
+                token = GameObject.Find("Token " + i).GetComponent<Image>().sprite.name;
+            } else
+            {
+                token = "Robber";
+            }
+            PlayerPrefsManager.SetToken(i, token);
+
+
+            //save harbours
+            if (i < 19)
+            {
+                string harbour;
+                if(GameObject.Find("Harbour " + i).GetComponent<Image>().color != Color.grey)
+                {
+                    harbour = GameObject.Find("Harbour " + i).GetComponent<Image>().sprite.name;
+                    PlayerPrefsManager.SetHarbour(i,harbour);
+                } else
+                {
+                    harbour = "null";
+                    PlayerPrefsManager.SetHarbour(i,harbour);
+                }
+            }
+        }
+        LoadNextLevel();
+    }
+
+    public void SaveOpponentSetup()
+    {
+        for (int i = 1; i < 4; i++)
+        {
+            string setting = GameObject.Find("Opponent " + i + " Dropdown").transform.FindChild("ContainerText").GetComponent<Text>().text;
+            PlayerPrefsManager.SetOpponentSetting(i, setting);
+        }
+        LoadNextLevel();
+    }
+}

@@ -1,0 +1,63 @@
+﻿using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using System.Collections;
+using System;
+
+public class Results : MonoBehaviour {
+    public Text[] p1StatsText;
+    public Text[] p2StatsText;
+    public Text[] p3StatsText;
+    public Text[] p4StatsText;
+
+    // Use this for initialization
+    void Start () {
+        int[] p1stats = PlayerPrefsManager.GetStats(1);
+        int[] p2stats = PlayerPrefsManager.GetStats(2);
+        int[] p3stats = PlayerPrefsManager.GetStats(3);
+        int[] p4stats = PlayerPrefsManager.GetStats(4);
+        int winner = PlayerPrefsManager.GetWinner();
+        if(winner == 1)
+        {
+            GameObject.Find("Winner label").GetComponent<Text>().text = "Player 1 won the game";
+            GameObject.Find("Winner label").GetComponent<Text>().color = Color.red;
+        }
+        else if (winner == 2)
+        {
+            GameObject.Find("Winner label").GetComponent<Text>().text = "Player 2 won the game";
+            GameObject.Find("Winner label").GetComponent<Text>().color = Color.yellow;
+        }
+        else if (winner == 3)
+        {
+            GameObject.Find("Winner label").GetComponent<Text>().text = "Player 3 won the game";
+            GameObject.Find("Winner label").GetComponent<Text>().color = Color.white;
+        }
+        else if (winner == 4)
+        {
+            GameObject.Find("Winner label").GetComponent<Text>().text = "Player 4 won the game";
+            GameObject.Find("Winner label").GetComponent<Text>().color = Color.blue;
+        }
+
+        for (int i = 0; i < 8; i++)
+        {
+            if (i == 5 || i == 6)
+            {
+                if (p1stats[i] == 1) { p1StatsText[i].text = "YES"; }
+                else { p1StatsText[i].text = "NO"; }
+                if (p2stats[i] == 1) { p2StatsText[i].text = "YES"; }
+                else { p2StatsText[i].text = "NO"; }
+                if (p3stats[i] == 1) { p3StatsText[i].text = "YES"; }
+                else { p3StatsText[i].text = "NO"; }
+                if (p4stats[i] == 1) { p4StatsText[i].text = "YES"; }
+                else { p4StatsText[i].text = "NO"; }
+            }
+            else
+            {
+                p1StatsText[i].text = p1stats[i].ToString();
+                p2StatsText[i].text = p2stats[i].ToString();
+                p3StatsText[i].text = p3stats[i].ToString();
+                p4StatsText[i].text = p4stats[i].ToString();
+            }
+        }
+	}
+}

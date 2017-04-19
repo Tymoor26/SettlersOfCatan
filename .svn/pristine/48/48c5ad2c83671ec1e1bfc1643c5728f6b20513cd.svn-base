@@ -1,0 +1,29 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+
+public class HarbourButton : MonoBehaviour {
+    public Sprite harbourPrefab;
+    public static Sprite selectedHarbour;
+
+    private HarbourButton[] buttonArray;
+
+    // Use this for initialization
+    void Start()
+    {
+        buttonArray = GameObject.FindObjectsOfType<HarbourButton>();
+    }
+
+    void OnMouseDown()
+    {
+        foreach (HarbourButton thisButton in buttonArray)
+        {
+            if (thisButton.GetComponent<SpriteRenderer>().color.a > 0.5f)
+            {
+                thisButton.GetComponent<SpriteRenderer>().color -= new Color(0, 0, 0, 0.5f);
+            }
+        }
+        GetComponent<SpriteRenderer>().color += new Color(0, 0, 0, 0.5f);
+        selectedHarbour = harbourPrefab; 
+    }
+}

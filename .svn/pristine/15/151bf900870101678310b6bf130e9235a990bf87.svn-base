@@ -1,0 +1,29 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+
+public class TerrainButton : MonoBehaviour {
+    public Sprite terrainPrefab;
+    public static Sprite selectedTerrain;
+
+    private TerrainButton[] buttonArray;
+
+    // Use this for initialization
+    void Start()
+    {
+        buttonArray = GameObject.FindObjectsOfType<TerrainButton>();
+    }
+
+    void OnMouseDown()
+    {
+        foreach (TerrainButton thisButton in buttonArray)
+        {
+            if (thisButton.GetComponent<SpriteRenderer>().color.a > 0.5f)
+            {
+                thisButton.GetComponent<SpriteRenderer>().color -= new Color(0, 0, 0, 0.5f);
+            }
+        }
+        GetComponent<SpriteRenderer>().color += new Color(0, 0, 0, 0.5f);
+        selectedTerrain = terrainPrefab;
+    }
+}

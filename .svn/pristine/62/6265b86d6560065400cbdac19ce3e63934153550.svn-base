@@ -1,0 +1,150 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+
+public class AI : MonoBehaviour {
+
+    private string aiSetting;
+
+    public void SetSettings(string setting)
+    {
+        aiSetting = setting;
+    }
+
+    public int SelectMoveToMake(List<int> listOfLegalMoves)
+    {
+        if (aiSetting == "Random") { return Random.RandomRange(0, listOfLegalMoves.Count); }
+        else return -1;
+    }
+
+    public int SelectDomesticMaritimeResourceToGive(List<int> listOfResourcesThatCanBeGiven)
+    {
+        if (aiSetting == "Random") { return Random.RandomRange(0, listOfResourcesThatCanBeGiven.Count); }
+        else { return -1; }
+    }
+
+    public int SelectDomesticMaritimeResourceToGet(List<int> listOfResourcesThatCanBeTaken)
+    {
+        if (aiSetting == "Random") { return Random.RandomRange(0, listOfResourcesThatCanBeTaken.Count); }
+        else { return -1; }
+    }
+
+    public int[] SelectPlayerTradeToGive(int brickResourceCount, int grainResourceCount, int lumberResourceCount, int oreResourceCount , int woolResourceCount)
+    {
+        int[] resourcesGiven = new int[5];
+        if (brickResourceCount > 0)
+        {
+            if (aiSetting == "Random") { resourcesGiven[0] = Random.RandomRange(0, brickResourceCount); }
+            else { resourcesGiven[0] = 0; }
+        }
+        else { resourcesGiven[0] = 0; }
+
+        if (grainResourceCount > 0)
+        {
+            if (aiSetting == "Random") { resourcesGiven[1] = Random.RandomRange(0, grainResourceCount); }
+            else { resourcesGiven[1] = 0; }
+        }
+        else { resourcesGiven[1] = 0; }
+
+        if (lumberResourceCount > 0)
+        {
+            if (aiSetting == "Random") { resourcesGiven[2] = Random.RandomRange(0, lumberResourceCount); }
+            else { resourcesGiven[2] = 0; }
+        }
+        else { resourcesGiven[2] = 0; }
+
+        if (oreResourceCount > 0)
+        {
+            if (aiSetting == "Random") { resourcesGiven[3] = Random.RandomRange(0, oreResourceCount); }
+            else { resourcesGiven[3] = 0; }
+        }
+        else { resourcesGiven[3] = 0; }
+
+        if (woolResourceCount > 0)
+        {
+            if (aiSetting == "Random") { resourcesGiven[4] = Random.RandomRange(0, woolResourceCount); }
+            else { resourcesGiven[4] = 0; }
+        }
+        else { resourcesGiven[4] = 0; }
+
+        return resourcesGiven;
+    }
+
+    public int[] SelectPlayerTradeToWant(int[] resourcesGiven)
+    {
+        int[] resourcesWanted = new int[5];
+        if (resourcesGiven[0] == 0)
+        {
+            if (aiSetting == "Random") { resourcesWanted[0] = Random.RandomRange(0, 3); }
+            else { resourcesWanted[0] = 0; }
+        }
+        else { resourcesWanted[0] = 0; }
+
+        if (resourcesGiven[1] == 0)
+        {
+            if (aiSetting == "Random") { resourcesWanted[1] = Random.RandomRange(0, 3); }
+            else { resourcesWanted[1] = 0; }
+        }
+        else { resourcesWanted[1] = 0; }
+
+        if (resourcesGiven[2] == 0)
+        {
+            if (aiSetting == "Random") { resourcesWanted[2] = Random.RandomRange(0, 3); }
+            else { resourcesWanted[2] = 0; }
+        }
+        else { resourcesWanted[2] = 0; }
+
+        if (resourcesGiven[3] == 0)
+        {
+            if (aiSetting == "Random") { resourcesWanted[3] = Random.RandomRange(0, 3); }
+            else { resourcesWanted[3] = 0; }
+        }
+        else { resourcesWanted[3] = 0; }
+
+        if (resourcesGiven[4] == 0)
+        {
+            if (aiSetting == "Random") { resourcesWanted[4] = Random.RandomRange(0, 3); }
+            else { resourcesWanted[4] = 0; }
+        }
+        else { resourcesWanted[4] = 0; }
+
+        return resourcesWanted;
+    }
+
+    public int SelectPlayerToTradeWith(List<int> listOfPeopleToTradeWith)
+    {
+        int size = listOfPeopleToTradeWith.Count;
+        if (aiSetting == "Random") { return listOfPeopleToTradeWith[Random.RandomRange(0, size)]; }
+        else { return 0; }
+    }
+
+    public GameObject SelectSettlementPlacement(List<GameObject> listOfValidSpots)
+    {
+        int size = listOfValidSpots.Count;
+        if (aiSetting == "Random") { return listOfValidSpots[Random.Range(0, size)]; }
+        else { return null; }
+    }
+
+    public GameObject SelectRoadPlacement(List<GameObject> listOfValidSpots)
+    {
+        int size = listOfValidSpots.Count;
+        if (aiSetting == "Random") { return listOfValidSpots[Random.Range(0, size)]; }
+        else { return null; }
+    }
+
+    public GameObject SelectCityPlacement(List<GameObject> listOfValidSpots)
+    {
+        int size = listOfValidSpots.Count;
+        if (aiSetting == "Random") { return listOfValidSpots[Random.Range(0, size)]; }
+        else { return null; }
+    }
+
+    public int SelectNewRobberLocation(List<GameObject> listOfValidSpots)
+    {
+        int size = listOfValidSpots.Count;
+        if (aiSetting == "Random") { return Random.Range(0, size); }
+        else { return -1; }
+    }
+
+}

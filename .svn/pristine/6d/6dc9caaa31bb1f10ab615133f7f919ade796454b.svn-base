@@ -1,0 +1,46 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using System.Collections;
+using System.Collections.Generic;
+//This class was largely inspired by the youtube tutorial video:
+//Making a Scrollable Text Label in Unity 4.6 Tutorial .
+//By user Sloan Kelly
+//On Youtube.com
+//And
+//Inspired by the code on the thread:
+//How do I create a text box to display scrollable text I send it via script?
+//Created by grimreaperpt
+//On answers.unity3d.com
+
+//This class only contains a static method that is called by the other classes where 
+//it will update the summary text box with new actions in the game
+public class Summary : MonoBehaviour {
+
+    private static Text summaryText;
+    private static List<string> summaryList;
+    private static Scrollbar scrollbar;
+
+    private void Start()
+    {
+        summaryText = GameObject.Find("Summary Text").GetComponent<Text>();
+        summaryList = new List<string>();
+        scrollbar = GameObject.Find("Scrollbar").GetComponent<Scrollbar>();
+    }
+
+	public static void AddToSummary(string text)
+    {
+        summaryList.Add(text);
+        string summaryString = "";
+        foreach (string s in summaryList)
+        {
+            summaryString = summaryString + s + "\n";
+        }
+        if (summaryString.Length > 10000)
+        {
+            summaryString = summaryString.Substring(summaryString.Length - 10000);
+        }
+        scrollbar.value = 0;
+        summaryText.text = summaryString;
+    }
+}

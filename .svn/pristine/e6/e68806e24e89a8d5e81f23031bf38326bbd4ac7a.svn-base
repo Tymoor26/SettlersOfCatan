@@ -1,0 +1,458 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using System.Collections;
+
+public class Game : MonoBehaviour {
+    public Board board;
+    public Player player;
+    public Computer compPlayer1;
+    public Computer compPlayer2;
+    public Computer compPlayer3;
+    public GameObject currentTurnText;
+    private static int currentTurn;
+    private static bool initialRound1;
+    private static bool initialRound2;
+    private static bool generated;
+    private static int totalDevCardsRemaining;
+    private static int remainingRoadBuildingCards, remainingMonopolyCards, remainingYearOfPlentyCards, remainingKnightCards, remainingVictoryPointCards;
+
+    // Use this for initialization
+    void Start () {
+        board.SetUpBoard();
+        currentTurn = 1;
+        initialRound1 = true;
+        initialRound2 = false;
+        compPlayer1.SetSettings(PlayerPrefsManager.GetOpponentSetting(1), Color.yellow, 2);
+        compPlayer2.SetSettings(PlayerPrefsManager.GetOpponentSetting(2), Color.white,  3);
+        compPlayer3.SetSettings(PlayerPrefsManager.GetOpponentSetting(3), Color.blue,   4);
+        board.TurnAllRoadPlacementsUninteractable();
+        board.DeactivateRobberPlacementButtons();
+        generated = false;
+        DeactivatePlayerButtons();
+        GameObject.Find("Roll Dice Button").GetComponent<Button>().interactable = false;
+        GameObject.Find("End Turn Button").GetComponent<Button>().interactable = false;
+        totalDevCardsRemaining = 25;
+        remainingRoadBuildingCards = 2;
+        remainingMonopolyCards = 2;
+        remainingYearOfPlentyCards = 2;
+        remainingKnightCards = 14;
+        remainingVictoryPointCards = 5;
+    }
+
+    // Update is called once per frame
+    void Update () {
+        if      (initialRound1) { InitialTurnRound1(); }
+        else if (initialRound2) { InitialTurnRound2(); }
+        else if (currentTurn == 1)
+        {
+            if (!generated)
+            {
+                DeactivatePlayerButtons();
+                GameObject.Find("Roll Dice Button").GetComponent<Button>().interactable = true;
+                GameObject.Find("End Turn Button").GetComponent<Button>().interactable = false;
+            }
+            else  if (!player.GetIsMovingRobber() && !player.IsUsingDevCard()) { ActivatePlayerButtons(); }
+
+            currentTurnText.GetComponent<Text>().text = "Player 1";
+            currentTurnText.GetComponent<Text>().color = Color.red;
+        }
+        else if (currentTurn == 2)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 2";
+            currentTurnText.GetComponent<Text>().color = Color.yellow;
+            RollDice();
+            compPlayer1.CompTurn();
+            DoneWithTurn();
+        }
+        else if (currentTurn == 3)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 3";
+            currentTurnText.GetComponent<Text>().color = Color.white;
+            RollDice();
+            compPlayer2.CompTurn();
+            DoneWithTurn();
+        }
+        else if (currentTurn == 4)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 4";
+            currentTurnText.GetComponent<Text>().color = Color.blue;
+            RollDice();
+            compPlayer3.CompTurn();
+            DoneWithTurn();
+        }
+        else if (currentTurn > 4) { currentTurn = 1; }
+    }
+
+    public void DoneWithTurn()
+    {
+        currentTurn++;
+        generated = false;
+        DeactivatePlayerButtons();
+        board.TurnAllSettlementPlacementsUninteractable();
+        board.TurnAllRoadPlacementsUninteractable();
+        GameObject.Find("End Turn Button").GetComponent<Button>().interactable = false;
+    }
+
+    //----------------------------------------------------------------------------------
+    //These methods deal with buttons on the left hand panel of the screen (the one with the board)
+    public void RollDice()
+    {
+        generated = true;
+        int diceRoll1 = Random.RandomRange(1, 7);
+        int diceRoll2 = Random.RandomRange(1, 7);
+        int totalRoll = diceRoll1 + diceRoll2;
+        GameObject.Find("Dice Roll Text").GetComponent<Text>().text = totalRoll.ToString();
+
+        if (currentTurn == 1) { GameObject.Find("Roll Dice Button").GetComponent<Button>().interactable = false; }
+
+        if (totalRoll != 7)
+        {
+            GenerateResources(totalRoll);
+            if (currentTurn == 1)
+            {
+                GameObject.Find("Roll Dice Button").GetComponent<Button>().interactable = false;
+                GameObject.Find("End Turn Button").GetComponent<Button>().interactable = true;
+            }
+        }
+        else
+        {
+            DeactivatePlayerButtons();
+            GameObject.Find("End Turn Button").GetComponent<Button>().interactable = false;
+            Rolled7();
+        }
+    }
+
+    void GenerateResources(int roll)
+    {
+        player.GetResources(roll);
+        compPlayer1.GetResources(roll);
+        compPlayer2.GetResources(roll);
+        compPlayer3.GetResources(roll);
+    }
+
+    void Rolled7()
+    {
+        player.LoseHalfCards();
+        compPlayer1.LoseHalfCards();
+        compPlayer2.LoseHalfCards();
+        compPlayer3.LoseHalfCards();
+        if (currentTurn == 1)
+        {
+            player.SetMovingRobber(true);
+            player.GenerateRobberPlacements(false);
+        }
+        else if (currentTurn == 2) { compPlayer1.MoveRobber(); }
+        else if (currentTurn == 3) { compPlayer2.MoveRobber(); }
+        else if (currentTurn == 4) { compPlayer3.MoveRobber(); }
+    }
+
+    public static void SetEndTurnButtonBackOn() { GameObject.Find("End Turn Button").GetComponent<Button>().interactable = true; }
+
+    //--------------------------------------------------------------------------
+    //These methods activate and deactivates the buttons the player can press
+
+    public static void DeactivatePlayerButtons()
+    {
+        GameObject.Find("Trade Button").GetComponent<Button>().interactable                  = false;
+        GameObject.Find("Build Road Button").GetComponent<Button>().interactable             = false;
+        GameObject.Find("Build Settlement Button").GetComponent<Button>().interactable       = false;
+        GameObject.Find("Build City Button").GetComponent<Button>().interactable             = false;
+        GameObject.Find("Build Development Card Button").GetComponent<Button>().interactable = false;
+
+        GameObject.Find("Road Building Card Button").GetComponent<Button>().interactable     = false;
+        GameObject.Find("Monopoly Card Button").GetComponent<Button>().interactable          = false;
+        GameObject.Find("Year of Plenty Card Button").GetComponent<Button>().interactable    = false;
+        GameObject.Find("Knight Card Button").GetComponent<Button>().interactable            = false;
+        GameObject.Find("Victory Point Card Button").GetComponent<Button>().interactable     = false;
+    }
+
+    void ActivatePlayerButtons()
+    {
+        GameObject.Find("Trade Button").GetComponent<Button>().interactable                  = player.CanPlayerTrade();
+        GameObject.Find("Build Road Button").GetComponent<Button>().interactable             = player.CanPlayerBuildRoad();
+        GameObject.Find("Build Settlement Button").GetComponent<Button>().interactable       = player.CanPlayerBuildSettlement();
+        GameObject.Find("Build City Button").GetComponent<Button>().interactable             = player.CanPlayerBuildCity(); 
+        GameObject.Find("Build Development Card Button").GetComponent<Button>().interactable = player.CanPlayerBuildDevCard();
+
+        GameObject.Find("Road Building Card Button").GetComponent<Button>().interactable     = player.DoesPlayerHaveRoadBuildingCard();
+        GameObject.Find("Monopoly Card Button").GetComponent<Button>().interactable          = player.DoesPlayerHaveMonopolyCard();
+        GameObject.Find("Year of Plenty Card Button").GetComponent<Button>().interactable    = player.DoesPlayerHaveYearOfPlentyCard();
+        GameObject.Find("Knight Card Button").GetComponent<Button>().interactable            = player.DoesPlayerHaveKnightCard();
+        GameObject.Find("Victory Point Card Button").GetComponent<Button>().interactable     = player.DoesPlayerHaveVictoryPointCard();
+    }
+
+    void ActivateResourceCardButtons()
+    {
+        GameObject.Find("Brick Card Image").GetComponent<Button>().interactable = true;
+        ColorBlock c = GameObject.Find("Brick Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.magenta;
+        GameObject.Find("Brick Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Grain Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Grain Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.magenta;
+        GameObject.Find("Grain Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Lumber Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Lumber Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.magenta;
+        GameObject.Find("Lumber Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Ore Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Ore Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.magenta;
+        GameObject.Find("Ore Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Wool Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Wool Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.magenta;
+        GameObject.Find("Wool Card Image").GetComponent<Button>().colors = c;
+    }
+
+    void DeactivateResourceCardButtons()
+    {
+        GameObject.Find("Brick Card Image").GetComponent<Button>().interactable = true;
+        ColorBlock c = GameObject.Find("Brick Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.white;
+        GameObject.Find("Brick Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Grain Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Grain Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.white;
+        GameObject.Find("Grain Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Lumber Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Lumber Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.white;
+        GameObject.Find("Lumber Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Ore Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Ore Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.white;
+        GameObject.Find("Ore Card Image").GetComponent<Button>().colors = c;
+
+        GameObject.Find("Wool Card Image").GetComponent<Button>().interactable = true;
+        c = GameObject.Find("Wool Card Image").GetComponent<Button>().colors;
+        c.normalColor = Color.white;
+        GameObject.Find("Wool Card Image").GetComponent<Button>().colors = c;
+    }
+
+    void DeactivateEverythingOtherThanDevCardButtons()
+    {
+        board.TurnAllSettlementPlacementsUninteractable();
+        board.TurnAllRoadPlacementsUninteractable();
+        board.DeactivateRobberPlacementButtons();
+        player.SetNotUsingMonopolyCard();
+        DeactivateResourceCardButtons();
+    }
+
+    //----------------------------------------------------------------------------------
+    //These methods deal with the four main build buttons
+    public void BuildRoadButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        player.GeneratePlayerLegalRoadPlacements(false);
+    }
+
+    public void BuildSettlementButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        player.GeneratePlayerLegalSettlementPlacements();
+    }
+
+    public void BuildCityButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        player.GenerateLegalCityPlacements();
+    }
+
+    public void BuildDevCardButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        player.PlayerBuildDevCard();
+    }
+
+    //-------------------------------------------------------------------------------
+    //These methods deal with pressing the development card buttons
+    public void UseRoadBuildingCardButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        player.GeneratePlayerLegalRoadPlacements(true);
+    }
+
+    public void UseMonopolyCardButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        ActivateResourceCardButtons();
+        player.SetUsingMonopolyCard();
+    }
+
+    public void UseYearOfPlentyCardButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        ActivateResourceCardButtons();
+        player.SetUsingYearOfPlentyCard();
+    }
+
+    public void UseKnightCardButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        player.GenerateRobberPlacements(true);
+    }
+
+    public void UseVictoryPointCardButtonPressed()
+    {
+        DeactivateEverythingOtherThanDevCardButtons();
+        player.UseVictoryPointCard();
+    }
+
+    public void CardSelected(int card)
+    {
+        if (player.IsUsingMonopolyCard())
+        {
+            player.UseMonopolyCard(card);
+            player.SetNotUsingMonopolyCard();
+        }
+        else if (player.IsUsingYearOfPlentyCard())
+        {
+            player.GainOrLoseResource(card, 1);
+            print(player.GetAmountOfYearOfPlentyCardsSelected());
+            if(player.GetAmountOfYearOfPlentyCardsSelected() < 1) { player.IncrementAmountOfYearOfPlentyCardsSelected(); }
+            else                                                  { player.SetNotUsingYearOfPlentyCard();                }
+        }
+
+        if(!player.IsUsingMonopolyCard() && !player.IsUsingYearOfPlentyCard()) { DeactivateEverythingOtherThanDevCardButtons(); }
+    }
+
+    //--------------------------------------------------------------------------
+    //Get and set methods for the development cards, dev card build buttons and other buttons
+    public static void RoadBuildingCardBuilt()
+    {
+        remainingRoadBuildingCards--;
+        totalDevCardsRemaining--;
+        GameObject.Find("Development Card Count Text").GetComponent<Text>().text = totalDevCardsRemaining.ToString();
+    }
+
+    public static void MonopolyCardBuilt()
+    {
+        remainingMonopolyCards--;
+        totalDevCardsRemaining--;
+        GameObject.Find("Development Card Count Text").GetComponent<Text>().text = totalDevCardsRemaining.ToString();
+    }
+
+    public static void YearOfPlentyCardBuilt()
+    {
+        remainingYearOfPlentyCards--;
+        totalDevCardsRemaining--;
+        GameObject.Find("Development Card Count Text").GetComponent<Text>().text = totalDevCardsRemaining.ToString();
+    }
+
+    public static void KnightCardBuilt()
+    {
+        remainingKnightCards--;
+        totalDevCardsRemaining--;
+        GameObject.Find("Development Card Count Text").GetComponent<Text>().text = totalDevCardsRemaining.ToString();
+    }
+
+    public static void VictoryPointCardBuilt()
+    {
+        remainingVictoryPointCards--;
+        totalDevCardsRemaining--;
+        GameObject.Find("Development Card Count Text").GetComponent<Text>().text = totalDevCardsRemaining.ToString();
+    }
+
+    public static int GetTotalDevCardsRemaining()     { return totalDevCardsRemaining;     }
+    public static int GetRoadBuildingCardsRemaining() { return remainingRoadBuildingCards; }
+    public static int GetMonopolyCardsRemaining()     { return remainingMonopolyCards;     }
+    public static int GetYearOfPlentyCardsRemaining() { return remainingYearOfPlentyCards; }
+    public static int GetKnightCardsRemaining()       { return remainingKnightCards;       }
+    public static int GetVictoryPointCardsRemaining() { return remainingVictoryPointCards; }
+
+    //--------------------------------------------------------------------------
+    //initial turn round methods
+    void InitialTurnRound1()
+    {
+        if (currentTurn == 1)
+        {
+            if (!generated) { player.GeneratePlayerLegalSettlementPlacements(); }
+            currentTurnText.GetComponent<Text>().text = "Player 1 initial placement";
+            currentTurnText.GetComponent<Text>().color = Color.red;
+            generated = true;
+        }
+        else if (currentTurn == 2)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 2 initial placement";
+            currentTurnText.GetComponent<Text>().color = Color.yellow;
+            compPlayer1.CompTurn();
+            currentTurn++;
+        }
+        else if (currentTurn == 3)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 3 initial placement";
+            currentTurnText.GetComponent<Text>().color = Color.white;
+            compPlayer2.CompTurn();
+            currentTurn++;
+        }
+        else if (currentTurn == 4)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 4 initial placement";
+            currentTurnText.GetComponent<Text>().color = Color.blue;
+            compPlayer3.CompTurn();
+            currentTurn++;
+        }
+        else if (currentTurn > 4)
+        {
+            currentTurn = 4;
+            initialRound1 = false;
+            initialRound2 = true;
+        }
+    }
+
+    void InitialTurnRound2()
+    {
+        if (currentTurn == 1)
+        {
+            if (!generated) { player.GeneratePlayerLegalSettlementPlacements(); }
+            currentTurnText.GetComponent<Text>().text = "Player 1 second placement";
+            currentTurnText.GetComponent<Text>().color = Color.red;
+            generated = true;
+        }
+        else if (currentTurn == 2)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 2 second placement";
+            currentTurnText.GetComponent<Text>().color = Color.yellow;
+            compPlayer1.CompTurn();
+            currentTurn--;
+        }
+        else if (currentTurn == 3)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 3 second placement";
+            currentTurnText.GetComponent<Text>().color = Color.white;
+            compPlayer2.CompTurn();
+            currentTurn--;
+        }
+        else if (currentTurn == 4)
+        {
+            currentTurnText.GetComponent<Text>().text = "Player 4 second placement";
+            currentTurnText.GetComponent<Text>().color = Color.blue;
+            compPlayer3.CompTurn();
+            currentTurn--;
+        }
+        else if (currentTurn <1)
+        {
+            currentTurn = 1;
+            initialRound2 = false;
+        }
+    }
+
+    public static bool GetInitial1() { return initialRound1; }
+    public static bool GetInitial2() { return initialRound2; }
+
+    public static void InitialTurnDone()
+    {
+        if (initialRound2) { currentTurn--; }
+        else { currentTurn++; }
+        generated = false;
+    }
+}

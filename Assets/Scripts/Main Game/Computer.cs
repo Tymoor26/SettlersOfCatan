@@ -1,0 +1,715 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+
+//This class deals with everything to do with the computers actions.
+//This ranges from generating the list of legal spots for building pieces
+//such as settlements, roads and cities and spots to move the robber. It also handles when a piece is placed
+//onto the board. It also updates all the counters to do with the computer such as 
+//the amount of each resource they are holding as well as dev cards.
+//Another thing it handles is when a trade offer is received from another player.
+//This class is similarly structured to the Player class except this handles things thats
+//specifically tuned to the Computer
+public class Computer : MonoBehaviour {
+
+    public Sprite[] boardPieces;
+    public Board board;
+    public ScoreBoard scoreBoard;
+    private Color oppColour;
+    private int playerNumber;
+    //private int brickResourceCount = 3, grainResourceCount = 3, lumberResourceCount = 3, oreResourceCount = 3, woolResourceCount = 3;
+    private int brickResourceCount = 0, grainResourceCount = 0, lumberResourceCount = 0, oreResourceCount = 0, woolResourceCount = 0;
+    //private int roadBuildingDevCount = 10, monopolyDevCount = 10, yearOfPlentyDevCount = 10, knightDevCount = 10, victoryPointDevCount = 10;
+    private int roadBuildingDevCount = 0, monopolyDevCount = 0, yearOfPlentyDevCount = 0, knightDevCount = 0, victoryPointDevCount = 0;
+    private int totalResourceCardsInHand = 0;
+    private int totalDevCardsInHand = 0;
+    private int remainingRoadsToBuild = 15;
+    private int remainingSettlementsToBuild = 5;
+    private int remainingCitiesToBuild = 4;
+    private bool[] computerTradeResponses = new bool[2];
+    private bool currentlyPlayerTrading = false;
+    private AI ai = new AI();
+
+    //------------------------------------------------------------------------
+    //Initial setup of computer players
+    public void SetSettings(string setting, Color color, int pNumber)
+    {
+        ai.SetSettings(setting,board, pNumber);
+        oppColour = color;
+        playerNumber = pNumber;
+    }
+
+    //------------------------------------------------------------------------
+    //These methods deals with the what is done in the computers turn
+
+    //This method generates all the legal moves that the computer can currently do and calls a method in the
+    //AI class to decide what to do. This will be repeated until the computer ends the turn, either by choice or because they
+    //exhausted all possible moves
+    public bool CompTurn()
+    {
+        if (Game.GetInitial1() || Game.GetInitial2()) { CompPlaceSettlement(); }
+        else if(!Game.computerDoingPlayerTrade)
+        {
+            List<int> listOfLegalMoves = GenerateLegalMoves();
+            int[] resourcesCurrentlyHolding = GetCurrentResourcesInHandAsArray();
+            int moveChoice = ai.SelectMoveToMake(listOfLegalMoves, GenerateComputerLegalSettlementPlacements().Count,
+                GenerateComputerLegalRoadPlacements().Count, GenerateComputerLegalCityPlacements().Count, Game.GetTotalDevCardsRemaining(), 
+                resourcesCurrentlyHolding, totalResourceCardsInHand, remainingRoadsToBuild, remainingSettlementsToBuild, remainingCitiesToBuild);
+
+            if      (moveChoice == 0)  { ai.ResetLastPlayerTradeCheck();                                                   return true;                      }
+            else if (moveChoice == 1)  { Summary.AddToSummary("P" + playerNumber + ": Built road");                        CompPlaceRoad(false);             }
+            else if (moveChoice == 2)  { Summary.AddToSummary("P" + playerNumber + ": Built settlement");                  CompPlaceSettlement();            }
+            else if (moveChoice == 3)  { Summary.AddToSummary("P" + playerNumber + ": Built city");                        CompPlaceCity();                  }
+            else if (moveChoice == 4)  { Summary.AddToSummary("P" + playerNumber + ": Built dev card");                    CompBuildDevCard();               }
+            else if (moveChoice == 5)  { Summary.AddToSummary("P" + playerNumber + ": Road building card used");           CompRoadBuildingCardUsed();       }
+            else if (moveChoice == 6)  { Summary.AddToSummary("P" + playerNumber + ": Monopoly card used");                CompMonopolyCardUsed();           }
+            else if (moveChoice == 7)  { Summary.AddToSummary("P" + playerNumber + ": Year of plenty card used");          CompYearOfPlentyCardUsed();       }
+            else if (moveChoice == 8)  { Summary.AddToSummary("P" + playerNumber + ": Knight card used");                  CompKnightCardUsed();             }
+            else if (moveChoice == 9)  { Summary.AddToSummary("P" + playerNumber + ": Victory point card used");           CompVictoryPointCardUsed();       } 
+            else if (moveChoice == 10) {                                                                                   CompDomesticMaritimeTrade();      }
+            else if (moveChoice == 11) { Summary.AddToSummary("P" + playerNumber + ": Player trade attempted");            CompPlayerTrade();                }
+
+        }
+        return false;
+    }
+
+    //This method generates the list of legal moves
+    private List<int> GenerateLegalMoves()
+    {
+        List<int> listOfLegalMoves = new List<int>();
+        listOfLegalMoves.Add(0);
+        if (CanCompPlayerBuildRoad())                 { listOfLegalMoves.Add(1);  }
+        if (CanCompPlayerBuildSettlement())           { listOfLegalMoves.Add(2);  }
+        if (CanCompPlayerBuildCity())                 { listOfLegalMoves.Add(3);  }
+        if (CanCompPlayerBuildDevCard())              { listOfLegalMoves.Add(4);  }
+        if (DoesCompPlayerHaveRoadBuildingCard())     { listOfLegalMoves.Add(5);  }
+        if (DoesCompPlayerHaveMonopolyCard())         { listOfLegalMoves.Add(6);  }
+        if (DoesCompPlayerHaveYearOfPlentyCard())     { listOfLegalMoves.Add(7);  }
+        if (DoesCompPlayerHaveKnightCard())           { listOfLegalMoves.Add(8);  }
+        if (DoesCompPlayerHaveVictoryPointCard())     { listOfLegalMoves.Add(9);  }
+        if (CanCompPlayerMakeDomesticMaritimeTrade()) { listOfLegalMoves.Add(10); }
+        if (CanCompPlayerMakePlayerTrade())           { listOfLegalMoves.Add(11); }
+        return listOfLegalMoves;
+    }
+
+
+    //------------------------------------------------------------------------
+    //Methods of the build actions the computer player can take
+
+    //This method deals with the placement of a settlement by the computer.
+    //It does this by generating the list of legal settlement placement spots, then it
+    //calls the AI class to pick which spot to place it on. It will then update the resource counts
+    //accordingly and set the colour of the settlement on the spot to match the colour of the computer player.
+    private void CompPlaceSettlement()
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalSettlementPlacements();
+        GameObject settlementSpot = ai.SelectSettlementPlacement(listOfValidSpots);
+        Button theButton = settlementSpot.GetComponent<Button>();
+        ColorBlock theColor = settlementSpot.GetComponent<Button>().colors;
+        theColor.disabledColor = oppColour;
+        theButton.colors = theColor;
+
+        if (settlementSpot.GetComponent<Image>().sprite.name == "UISprite")
+        {
+            settlementSpot.GetComponent<Image>().sprite = boardPieces[0];
+            scoreBoard.SettlementPointScored(playerNumber);
+            if (!Game.GetInitial1() && !Game.GetInitial2()) //if its not the initial round of turns then do this
+            {
+                brickResourceCount--;
+                lumberResourceCount--;
+                grainResourceCount--;
+                woolResourceCount--;
+                UpdateTotalResourceCardCount();
+            }
+            remainingSettlementsToBuild--;
+        }
+        theButton.interactable = false;
+        if      (Game.GetInitial1()) { CompPlaceRoad(false);                     }
+        else if (Game.GetInitial2()) { CompPlaceSecondRoad(settlementSpot); }
+    }
+
+    //This method deals with the placement of a road by the computer.
+    //It does this by generating the list of legal road placement spots, then it
+    //calls the AI class to pick which spot to place it on. It will then update the resource counts
+    //accordingly and set the colour of the road on the spot to match the colour of the computer player.
+    private void CompPlaceRoad(bool usingRoadBuildingCard)
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalRoadPlacements();
+        GameObject roadSpot = ai.SelectRoadPlacement(listOfValidSpots);
+        Button theButton = roadSpot.GetComponent<Button>();
+        ColorBlock theColor = roadSpot.GetComponent<Button>().colors;
+        theColor.disabledColor = oppColour;
+        theButton.colors = theColor;
+        theButton.interactable = false;
+        scoreBoard.RoadPlaced(playerNumber);
+        remainingRoadsToBuild--;
+
+        if (!Game.GetInitial1() && !Game.GetInitial2() && !usingRoadBuildingCard) //If its not the initial round of turns and the computer isn't using the road building card
+        {
+            brickResourceCount--;
+            lumberResourceCount--;
+            UpdateTotalResourceCardCount();
+        }
+    }
+
+    //This method deals with the placement of a city by the computer.
+    //It does this by generating the list of legal city placement spots, then it
+    //calls the AI class to pick which spot to place it on. It will then update the resource counts
+    //accordingly and set the colour of the city on the spot to match the colour of the computer player.
+    private void CompPlaceCity()
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalCityPlacements();
+        GameObject citySpot = ai.SelectCityPlacement(listOfValidSpots);
+        citySpot.GetComponent<Image>().sprite = boardPieces[1];
+        scoreBoard.CityPointScored(playerNumber);
+
+        oreResourceCount = oreResourceCount - 3;
+        grainResourceCount = grainResourceCount - 2;
+        UpdateTotalResourceCardCount();
+
+        remainingSettlementsToBuild++;
+        remainingCitiesToBuild--;
+    }
+
+    //This method deals with when the computer decides to build a development card.
+    //It does this by getting the list of the remaining development cards which are put in a random order
+    //and it randomly picks one from the list.
+    private void CompBuildDevCard()
+    {
+        int[] listOfDevCards = GetListOfAvailableDevCards();
+        int p = Random.RandomRange(0, Game.GetTotalDevCardsRemaining());
+        int card = listOfDevCards[p];
+
+        oreResourceCount--;
+        woolResourceCount--;
+        grainResourceCount--;
+        UpdateTotalResourceCardCount();
+
+        if (card == 1) //road buiding card recieved
+        {
+            roadBuildingDevCount++;
+            Game.RoadBuildingCardBuilt();
+        }
+        else if (card == 2) //monopoly card recieved
+        {
+            monopolyDevCount++;
+            Game.MonopolyCardBuilt();
+        }
+        else if (card == 3) //year of plenty card recieved
+        {
+            yearOfPlentyDevCount++;
+            Game.YearOfPlentyCardBuilt();
+        }
+        else if (card == 4) //knight card recieved
+        {
+            knightDevCount++;
+            Game.KnightCardBuilt();
+        }
+        else if (card == 5) //victory point card recieved
+        {
+            victoryPointDevCount++;
+            Game.VictoryPointCardBuilt();
+        }
+    }
+
+    //-----------------------------------------------------------
+    //Methods that generates legal moves that the computer can make
+
+    //This gets the list of the available development cards. This puts them
+    //in a list thats in random order.
+    private int[] GetListOfAvailableDevCards()
+    {
+        int remainingDevCards = Game.GetTotalDevCardsRemaining();
+        int[] listOfDevCards = new int[remainingDevCards];
+        for (int i = 0; i < remainingDevCards; i++)
+        {
+            bool checker = false;
+            while (!checker)
+            {
+                int r = Random.RandomRange(1, 6);
+                if (r == 1 && Game.GetRoadBuildingCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 1;
+                    checker = true;
+                }
+                else if (r == 2 && Game.GetMonopolyCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 2;
+                    checker = true;
+                }
+                else if (r == 3 && Game.GetYearOfPlentyCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 3;
+                    checker = true;
+                }
+                else if (r == 4 && Game.GetKnightCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 4;
+                    checker = true;
+                }
+                else if (r == 5 && Game.GetVictoryPointCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 5;
+                    checker = true;
+                }
+            }
+        }
+        return listOfDevCards;
+    }
+
+    //This method generates all the legal settlement placement spots on the board for the computer player
+    private List<GameObject> GenerateComputerLegalSettlementPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + i);
+            Button theButton = settlementSpot.GetComponent<Button>();
+            Color black = new Color(0, 0, 0, 0);
+            if (theButton.colors.disabledColor == black
+                && board.ObeysDistanceRule(settlementSpot)
+                && board.CheckForConnectingRoads(settlementSpot, 1, Game.GetInitial1(), Game.GetInitial2(), oppColour)) { listOfValidSpots.Add(settlementSpot); }
+        }
+        return listOfValidSpots;
+    }
+
+    //This method generates all the legal road placement spots on the board for the computer player.
+    private List<GameObject> GenerateComputerLegalRoadPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject roadSpot = GameObject.Find("Road Button " + i);
+            Button theButton = roadSpot.GetComponent<Button>();
+            Color black = new Color(0, 0, 0, 0);
+            if (theButton.colors.disabledColor == black)
+            {
+                if (board.CheckForConnectingSettlements(roadSpot, oppColour)
+                || board.CheckForConnectingRoads(roadSpot, 0, Game.GetInitial1(), Game.GetInitial2(), oppColour)) { listOfValidSpots.Add(roadSpot); }
+            }
+        }
+        return listOfValidSpots;
+    }
+
+    //This method generates all the legal city placement spots for the computer player
+    private List<GameObject> GenerateComputerLegalCityPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject citySpot = GameObject.Find("Settlement/City button " + i);
+            Button theButton = citySpot.GetComponent<Button>();
+            if (theButton.colors.disabledColor == oppColour && citySpot.GetComponent<Image>().sprite == boardPieces[0]) { listOfValidSpots.Add(citySpot); }
+        }
+        return listOfValidSpots;
+    }
+
+    //---------------------------------------------------------------------------------
+    //These methods handles all the resource management
+
+    //This method gets called when the dice roll happens at the start of each turn
+    //If no resources are produced, then a messgae saying so is added to the summary table
+    public void GetResources(int roll)
+    {
+        bool check = true;
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject token = GameObject.Find("Token " + i);
+            string tokenName = roll + " token";
+            if (token.GetComponent<Image>().sprite.name == tokenName)
+            {
+                GameObject hex = GameObject.Find("Hex " + i);
+                int amountOfResources = board.GetAmountOfResourcesFromHex(hex, oppColour);
+                UpdateResourceCountsWithGivenHex(hex, amountOfResources);
+                check = false;
+            }
+        }
+        if (check) { Summary.AddToSummary("P" + playerNumber + ": Produced nothing"); }
+    }
+
+    //This method updates the resource counters for a given resource card
+    public void GainOrLoseResource(int card, int amount)
+    {
+        string gainOrLose = "";
+        if (amount < 0) { gainOrLose = "lost";   }
+        else            { gainOrLose = "gained"; }
+
+        if (amount != 0)
+        {
+            if      (card == 1) { brickResourceCount  = brickResourceCount  + amount; Summary.AddToSummary("P" + playerNumber + ": " + amount + " Brick resource "  + gainOrLose); }
+            else if (card == 2) { grainResourceCount  = grainResourceCount  + amount; Summary.AddToSummary("P" + playerNumber + ": " + amount + " Grain resource "  + gainOrLose); }
+            else if (card == 3) { lumberResourceCount = lumberResourceCount + amount; Summary.AddToSummary("P" + playerNumber + ": " + amount + " Lumber resource " + gainOrLose); }
+            else if (card == 4) { oreResourceCount    = oreResourceCount    + amount; Summary.AddToSummary("P" + playerNumber + ": " + amount + " Ore resource "    + gainOrLose); }
+            else if (card == 5) { woolResourceCount   = woolResourceCount   + amount; Summary.AddToSummary("P" + playerNumber + ": " + amount + " Wool resource "   + gainOrLose); }
+        }
+        UpdateTotalResourceCardCount();
+    }
+
+    //This method is called when a 7 is rolled. In the case that the computer player is holding
+    //more than 7 cards, then half of the card will be picked at random and be removed.
+    public void LoseHalfCards()
+    {
+        if (totalResourceCardsInHand > 7)
+        {
+            int count = totalResourceCardsInHand / 2;
+            for (int i = count; i > 0; i--)
+            {
+                int card = Random.RandomRange(1, 6);
+                while (!CheckIfGotOneResource(card)) { card = Random.RandomRange(1, 6); }
+                GainOrLoseResource(card, -1);
+            }
+        }
+        UpdateTotalResourceCardCount();
+    }
+
+    //This method checks whether the computer player has at least one of a given resource
+    public bool CheckIfGotOneResource(int card)
+    {
+        if      (card == 1) { return (brickResourceCount  > 0); }
+        else if (card == 2) { return (grainResourceCount  > 0); }
+        else if (card == 3) { return (lumberResourceCount > 0); }
+        else if (card == 4) { return (oreResourceCount    > 0); }
+        else if (card == 5) { return (woolResourceCount   > 0); }
+        else { return false; }
+    }
+
+    //This method updates the resource counters for a given hex
+    private void UpdateResourceCountsWithGivenHex(GameObject hex, int amountOfResources)
+    {
+        if (amountOfResources > 0)
+        {
+            if      (hex.GetComponent<Image>().sprite.name == "Pasture tile")  { woolResourceCount   = woolResourceCount   + amountOfResources; Summary.AddToSummary("P" + playerNumber + ": Produced " + amountOfResources + " wool resource");   }
+            else if (hex.GetComponent<Image>().sprite.name == "Field tile")    { grainResourceCount  = grainResourceCount  + amountOfResources; Summary.AddToSummary("P" + playerNumber + ": Produced " + amountOfResources + " grain resource");  }
+            else if (hex.GetComponent<Image>().sprite.name == "Forest tile")   { lumberResourceCount = lumberResourceCount + amountOfResources; Summary.AddToSummary("P" + playerNumber + ": Produced " + amountOfResources + " lumber resource"); }
+            else if (hex.GetComponent<Image>().sprite.name == "Hill tile")     { brickResourceCount  = brickResourceCount  + amountOfResources; Summary.AddToSummary("P" + playerNumber + ": Produced " + amountOfResources + " brick resource");  }
+            else if (hex.GetComponent<Image>().sprite.name == "Mountain tile") { oreResourceCount    = oreResourceCount    + amountOfResources; Summary.AddToSummary("P" + playerNumber + ": Produced " + amountOfResources + " ore resource");    }
+            UpdateTotalResourceCardCount();
+        }
+    }
+
+    //This method updates the total resource count
+    private void UpdateTotalResourceCardCount() { totalResourceCardsInHand = brickResourceCount + grainResourceCount + lumberResourceCount + oreResourceCount + woolResourceCount; }
+
+
+    //---------------------------------------------------------------------
+    //Methods of the dev cards being used
+    private void CompRoadBuildingCardUsed()
+    {
+        CompPlaceRoad(true);
+        if (remainingRoadsToBuild > 0) { CompPlaceRoad(true); }
+        roadBuildingDevCount--;
+    }
+
+    private void CompMonopolyCardUsed()
+    {
+        int[] resourcesCurrentlyHolding = GetCurrentResourcesInHandAsArray();
+        int card = ai.ChooseResourceForMonopolyOrYopCard(resourcesCurrentlyHolding);
+        int totalResourcesGained = board.GetAllOfSpecificResourceOthersHold(playerNumber, card);
+        GainOrLoseResource(card, totalResourcesGained);
+        board.MonopolyUsed(playerNumber, card);
+        monopolyDevCount--;
+        UpdateTotalResourceCardCount();
+    }
+
+    private void CompYearOfPlentyCardUsed()
+    {
+        int[] resourcesCurrentlyHolding = GetCurrentResourcesInHandAsArray();
+        int card = ai.ChooseResourceForMonopolyOrYopCard(resourcesCurrentlyHolding);
+        GainOrLoseResource(card, 1);
+
+        resourcesCurrentlyHolding = GetCurrentResourcesInHandAsArray();
+        card = ai.ChooseResourceForMonopolyOrYopCard(resourcesCurrentlyHolding);
+        GainOrLoseResource(card, 1);
+
+        yearOfPlentyDevCount--;
+        UpdateTotalResourceCardCount();
+    }
+
+    private void CompKnightCardUsed()
+    {
+        MoveRobber();
+        scoreBoard.KnightCardUsed(playerNumber);
+        knightDevCount--;
+    }
+
+    private void CompVictoryPointCardUsed()
+    {
+        scoreBoard.VictoryPointCardUsed(playerNumber);
+        victoryPointDevCount--;
+    }
+    //------------------------------------------------------------------------
+    //Moving robber method
+
+    //This method is called when the computer player is either using a knight card or rolled a 7.
+    //It generates a list of available spots to move the robber and it calls the AI class to select
+    //where to place the robber. It also checks to see whether the hex the robber is currently on isn't a desert hex
+    //and finds the numbered token that was on that hex.
+    public void MoveRobber()
+    {
+        GameObject oldRobberSpot = GameObject.Find("");
+        int counter = 0;
+
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject token = GameObject.Find("Token " + i);
+            if (token.GetComponent<Image>().sprite.name == "Robber" && !(token.GetComponent<Image>().color == new Color(1, 1, 1, 0)))
+            {
+                oldRobberSpot = token;
+                counter = i;
+            }
+        }
+
+        List<GameObject> listOfValidSpots = GenerateRobberPlacements();
+        GameObject newRobberSpot = ai.SelectNewRobberLocation(listOfValidSpots);
+        int newSpot =int.Parse(newRobberSpot.name.Substring(6)); ;
+
+        string oldRobberSpotToken = board.GetOriginalToken(counter);
+        if (oldRobberSpotToken == "Robber") { oldRobberSpot.GetComponent<Image>().color = new Color(1, 1, 1, 0); }
+        else                                { board.SetTokenToOriginal(counter, oldRobberSpotToken);             }
+
+        board.SetTokenToRobber(newRobberSpot);
+        Summary.AddToSummary("P" + playerNumber + ": Moved robber");
+        newRobberSpot.GetComponent<Image>().color = new Color(1, 1, 1, 1);
+        GainOrLoseResource(board.StealResource(GameObject.Find("Hex " + newSpot), oppColour), 1);
+    }
+
+    //This method generates a list of robber placements
+    private List<GameObject> GenerateRobberPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject token = GameObject.Find("Token " + i);
+            if (token.GetComponent<Image>().sprite.name != "Robber" 
+                || token.GetComponent<Image>().color == new Color(1, 1, 1, 0)) { listOfValidSpots.Add(token); }
+        }
+        return listOfValidSpots;
+    }
+    //--------------------------------------------------------------------------------
+    //These methods deals with the trading
+
+    //This method sets up the and does the Domestic/Maritime trade
+    private void CompDomesticMaritimeTrade()
+    {
+        int g = ai.SelectDomesticMaritimeResourceToGive();
+        int r = ai.SelectDomesticMaritimeResourceToGet();
+        MakeDomesticMaritimeTrade(g, r);
+    }
+
+    //This method sets up and does the player trade
+    private void CompPlayerTrade()
+    {
+        int[] resourcesGiven = ai.SelectPlayerTradeToGive();
+        int[] resourcesWanted = ai.SelectPlayerTradeToWant();
+
+        if (resourcesGiven[0] > 0 || resourcesGiven[1] > 0 || resourcesGiven[2] > 0 || resourcesGiven[3] > 0 || resourcesGiven[4] > 0)
+        {
+            MakePlayerTrade(resourcesGiven, resourcesWanted);
+        }
+    }
+
+    //This method does the domestic/maritime trade
+    private void MakeDomesticMaritimeTrade(int resourceGiven, int resourceRecieved)
+    {
+        int amountGiven = board.getMinimumNeededToGiveForResource(resourceGiven, playerNumber);
+        if (amountGiven == 4) { Summary.AddToSummary("P" + playerNumber + ": made a Domestic Trade"); }
+        else                  { Summary.AddToSummary("P" + playerNumber + ": made a Maritime Trade"); }
+        GainOrLoseResource(resourceGiven, amountGiven * -1);
+        GainOrLoseResource(resourceRecieved, 1);
+        UpdateTotalResourceCardCount();
+    }
+
+    //This method does the player trade
+    private void MakePlayerTrade(int[] resourcesGiven, int[] resourcesWanted)
+    {
+        computerTradeResponses = board.ComputerTradeOffer(resourcesGiven, resourcesWanted, playerNumber);
+        Game.computerDoingPlayerTrade = true;
+    }
+
+    //This method is called when the computer player recieves a trade from another player. The AI class will decide
+    //whether to do accept or decline offer, assuming that they can. If they can't then its automatically rejected.
+    public bool GetTradeOffer(int[] resourcesWantedByOfferingPlayer, int[] resourcesGivenByOfferingPlayer, int offeringPlayer)
+    {
+        bool canTradeBrick  = brickResourceCount  >= resourcesWantedByOfferingPlayer[0];
+        bool canTradeGrain  = grainResourceCount  >= resourcesWantedByOfferingPlayer[1];
+        bool canTradeLumber = lumberResourceCount >= resourcesWantedByOfferingPlayer[2];
+        bool canTradeOre    = oreResourceCount    >= resourcesWantedByOfferingPlayer[3];
+        bool canTradeWool   = woolResourceCount   >= resourcesWantedByOfferingPlayer[4];
+        bool canTrade       = canTradeBrick && canTradeGrain && canTradeLumber && canTradeOre && canTradeWool;
+        int[] resourcesCurrentlyHolding = GetCurrentResourcesInHandAsArray();
+        if (canTrade)
+        {
+            int r = ai.SelectResponseToTrade(resourcesCurrentlyHolding, offeringPlayer, resourcesWantedByOfferingPlayer, resourcesGivenByOfferingPlayer);
+            if (r == 1) //accept offer
+            {
+                GameObject.Find("P" + playerNumber + " Trade Accept Button").GetComponentInChildren<Text>().text = "P" + playerNumber + ": Accepted trade";
+                return true;
+            }
+            else
+            {
+                GameObject.Find("P" + playerNumber + " Trade Accept Button").GetComponentInChildren<Text>().text = "P" + playerNumber + ": Declined trade";
+            }
+        }
+        else
+        {
+            GameObject.Find("P" + playerNumber + " Trade Accept Button").GetComponentInChildren<Text>().text = "P" + playerNumber + ": Unable to trade";
+        }
+        return false; //decline offer
+    }
+
+    //This method is called when the player gets all the responses to a trade they sent out to the other players.
+    //Then it will decide who to trade with or to cancel. If everyone rejected then this will automatically cancel the trade.
+    //If not then the AI class is called to decide who to pick.
+    public void FinaliseTrade(bool playerResponse, int[] resourcesGiven, int[] resourcesWanted)
+    {
+        List<int> listOfPeopleToTradeWith = new List<int>();
+        listOfPeopleToTradeWith.Add(0);
+        if (playerResponse)            { listOfPeopleToTradeWith.Add(1); }
+        if (computerTradeResponses[0]) { listOfPeopleToTradeWith.Add(2); }
+        if (computerTradeResponses[1]) { listOfPeopleToTradeWith.Add(3); }
+        int r = ai.SelectPlayerToTradeWith(listOfPeopleToTradeWith);
+        if (r != 0)
+        {
+            if (playerNumber == 2 && r > 1) { r++; }
+            else if (playerNumber == 3 && r == 3) { r++; }
+            for (int i = 0; i < 5; i++)
+            {
+                GainOrLoseResource(i + 1, resourcesGiven[i] * -1);
+                GainOrLoseResource(i + 1, resourcesWanted[i]);
+                board.ComputerFinaliseTrade(i + 1, resourcesGiven[i], resourcesWanted[i], playerNumber, r);
+            }
+            Summary.AddToSummary("P" + playerNumber + ": Successfully made a trade with P" + r);
+        }
+        else
+        {
+            if(listOfPeopleToTradeWith.Count == 1)
+            {
+                ai.LastPlayerTradeFailed();
+                Summary.AddToSummary("P" + playerNumber + ": Player trade failed");
+            }
+            else
+            {
+                ai.LastPlayerTradeCancelled();
+                Summary.AddToSummary("P" + playerNumber + ": Cancelled trade");
+            }
+        }
+        Game.computerDoingPlayerTrade = false;
+    }
+
+    //-----------------------------------------------------------------------------
+    //Methods to determine what moves the computer player can make
+    public bool CanCompPlayerTrade()           { return totalResourceCardsInHand > 0;                                                                                                                                                                         }
+    public bool CanCompPlayerBuildRoad()       { return brickResourceCount > 0 && lumberResourceCount > 0 && remainingRoadsToBuild  > 0 && GenerateComputerLegalRoadPlacements().Count > 0;                                                                   }
+    public bool CanCompPlayerBuildSettlement() { return brickResourceCount > 0 && lumberResourceCount > 0 && grainResourceCount     > 0 && woolResourceCount > 0 && remainingSettlementsToBuild > 0 && GenerateComputerLegalSettlementPlacements().Count > 0; }
+    public bool CanCompPlayerBuildCity()       { return oreResourceCount   > 2 && grainResourceCount  > 1 && remainingCitiesToBuild > 0 && GenerateComputerLegalCityPlacements().Count > 0;                                                                   }
+    public bool CanCompPlayerBuildDevCard()    { return oreResourceCount   > 0 && woolResourceCount   > 0 && grainResourceCount     > 0 && Game.GetTotalDevCardsRemaining() > 0;                                                                              }
+
+    public bool DoesCompPlayerHaveRoadBuildingCard() { return roadBuildingDevCount > 0 && remainingRoadsToBuild > 0; }
+    public bool DoesCompPlayerHaveMonopolyCard()     { return monopolyDevCount     > 0; }
+    public bool DoesCompPlayerHaveYearOfPlentyCard() { return yearOfPlentyDevCount > 0; }
+    public bool DoesCompPlayerHaveKnightCard()       { return knightDevCount       > 0; }
+    public bool DoesCompPlayerHaveVictoryPointCard() { return victoryPointDevCount > 0; }
+
+    public bool CanCompPlayerMakeDomesticMaritimeTrade()
+    {
+        return brickResourceCount  >= board.getMinimumNeededToGiveForResource(1, playerNumber)
+            || grainResourceCount  >= board.getMinimumNeededToGiveForResource(2, playerNumber)
+            || lumberResourceCount >= board.getMinimumNeededToGiveForResource(3, playerNumber)
+            || oreResourceCount    >= board.getMinimumNeededToGiveForResource(4, playerNumber)
+            || woolResourceCount   >= board.getMinimumNeededToGiveForResource(5, playerNumber);
+    }
+
+    public bool CanCompPlayerMakePlayerTrade()
+    {
+        return brickResourceCount  > 0
+            || grainResourceCount  > 0
+            || lumberResourceCount > 0
+            || oreResourceCount    > 0
+            || woolResourceCount   > 0;
+    }
+
+    //-----------------------------------------------------------------------------
+    //Getters and setters method for the variables
+
+    public int GetBrickResourceCount()  { return brickResourceCount;  }
+    public int GetGrainResourceCount()  { return grainResourceCount;  }
+    public int GetLumberResourceCount() { return lumberResourceCount; }
+    public int GetOreResourceCount()    { return oreResourceCount;    }
+    public int GetWoolResourceCount()   { return woolResourceCount;   }
+
+    public int GetAmountOfResource(int card)
+    {
+        if      (card == 1) { return brickResourceCount;  }
+        else if (card == 2) { return grainResourceCount;  }
+        else if (card == 3) { return lumberResourceCount; }
+        else if (card == 4) { return oreResourceCount;    }
+        else if (card == 5) { return woolResourceCount;   }
+        else                { return -1;                  }
+    }
+
+    public void LoseAllResourceMonopoly(int card)
+    {
+        if      (card == 1) { brickResourceCount = 0;  }
+        else if (card == 2) { grainResourceCount = 0;  }
+        else if (card == 3) { lumberResourceCount = 0; }
+        else if (card == 4) { oreResourceCount = 0;    }
+        else if (card == 5) { woolResourceCount = 0;   }
+        UpdateTotalResourceCardCount();
+    }
+
+    private int[] GetCurrentResourcesInHandAsArray()
+    {
+        int[] resourcesCurrentlyHolding = new int[5];
+        resourcesCurrentlyHolding[0] = brickResourceCount;
+        resourcesCurrentlyHolding[1] = grainResourceCount;
+        resourcesCurrentlyHolding[2] = lumberResourceCount;
+        resourcesCurrentlyHolding[3] = oreResourceCount;
+        resourcesCurrentlyHolding[4] = woolResourceCount;
+        return resourcesCurrentlyHolding;
+    }
+
+    //------------------------------------------------------------------------------------------------
+    //only called by the board class.
+    public int GetTotalDevCardCount()  { return totalDevCardsInHand;      }
+    public int GetTotalResourceCount() { return totalResourceCardsInHand; }
+
+    //------------------------------------------------------------------------------------------------
+    //only occurs once, at the beginning of the game
+    private void CompPlaceSecondRoad(GameObject settlementSpot)
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalRoadsSecondPlacements(settlementSpot);
+        GameObject roadSpot = ai.SelectRoadPlacement(listOfValidSpots);
+        Button theButton = roadSpot.GetComponent<Button>();
+        ColorBlock theColor = roadSpot.GetComponent<Button>().colors;
+        theColor.disabledColor = oppColour;
+        theButton.colors = theColor;
+        theButton.interactable = false;
+        scoreBoard.RoadPlaced(playerNumber);
+        remainingRoadsToBuild--;
+        GetInitialResources(settlementSpot);
+    }
+
+    private List<GameObject> GenerateComputerLegalRoadsSecondPlacements(GameObject settlementSpot)
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject roadSpot = GameObject.Find("Road Button " + i);
+            Button theButton = roadSpot.GetComponent<Button>();
+            Color black = new Color(0, 0, 0, 0);
+            if (theButton.colors.disabledColor == black && board.SpotComparison(settlementSpot,roadSpot,1)) { listOfValidSpots.Add(roadSpot); }
+        }
+        return listOfValidSpots;
+    }
+
+    private void GetInitialResources(GameObject settlementSpot)
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject hex = GameObject.Find("Hex " + i);
+            if (board.SpotComparison(settlementSpot,hex,3)) { UpdateResourceCountsWithGivenHex(hex,1); }
+        }
+        UpdateTotalResourceCardCount();
+    }
+}

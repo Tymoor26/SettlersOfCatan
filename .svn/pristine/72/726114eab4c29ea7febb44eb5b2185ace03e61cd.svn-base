@@ -1,0 +1,40 @@
+﻿using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using System.Collections;
+using System;
+
+//This class was largely inspired by the youtube tutorial video:
+//Unity 5 UI Tutorial - Dropdowns [#2 - Custom Editor] .
+//By user Lena Florian
+//On Youtube.com
+
+//This class handles the dropdown functionality of the AI behaviour selectors on the 
+//AI settings screen
+public class Dropdown : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+{
+
+    public RectTransform container;
+    public bool isOpen;
+
+    // Use this for initialization
+    private void Start()
+    {
+        container = transform.FindChild("Container").GetComponent<RectTransform>();
+        isOpen = false;
+    }
+
+    // Update is called once per frame
+    private void Update()
+    {
+        Vector3 scale = container.localScale;
+        scale.y = Mathf.Lerp(scale.y, isOpen ? 1 : 0, Time.deltaTime * 12);
+        container.localScale = scale;
+    }
+
+    public void OnPointerEnter(PointerEventData eventData) { isOpen = true;  }
+
+    public void OnPointerExit(PointerEventData eventData)  { isOpen = false; }
+
+    public void SelectOption(String text) { transform.FindChild("ContainerText").GetComponent<Text>().text = text; }
+}

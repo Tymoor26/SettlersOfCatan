@@ -1,0 +1,60 @@
+Initialize engine version: 5.4.1f1 (649f48bbbf0f)
+GfxDevice: creating device client; threaded=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.0]
+    Renderer: Intel(R) HD Graphics 5500 (ID=0x1616)
+    Vendor:   Intel
+    VRAM:     1127 MB
+Begin MonoManager ReloadAssembly
+Platform assembly: C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\UnityEngine.dll (this message is harmless)
+Loading C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\UnityEngine.dll into Unity Child Domain
+Platform assembly: C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\Assembly-CSharp.dll (this message is harmless)
+Loading C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\Assembly-CSharp.dll into Unity Child Domain
+Platform assembly: C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\UnityEngine.UI.dll (this message is harmless)
+Loading C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\UnityEngine.UI.dll into Unity Child Domain
+Platform assembly: C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\UnityEngine.Networking.dll (this message is harmless)
+Loading C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\UnityEngine.Networking.dll into Unity Child Domain
+- Completed reload, in  0.101 seconds
+Platform assembly: C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\System.Core.dll (this message is harmless)
+Platform assembly: C:\Users\Tymoor\Documents\repos\repos\Unity\SettlersBuild\SettlersOfCatanBuild_Data\Managed\System.dll (this message is harmless)
+desktop: 1366x768 60Hz; virtual: 1366x768 at 0,0
+<RI> Initializing input.
+<RI> Input initialized.
+<RI> Initialized touch support.
+UnloadTime: 30.680843 ms
+Setting up 1 worker threads for Enlighten.
+  Thread -> id: 2bcc -> priority: 1 
+Unloading 5 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 6.639987 ms
+
+Unloading 6 unused Assets to reduce memory usage. Loaded Objects now: 789.
+Total: 14.328528 ms (FindLiveObjects: 0.049735 ms CreateObjectMapping: 0.037942 ms MarkObjects: 14.225980 ms  DeleteObjects: 0.013843 ms)
+
+Unloading 3 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 23.328659 ms
+
+Unloading 32 unused Assets to reduce memory usage. Loaded Objects now: 393.
+Total: 0.520431 ms (FindLiveObjects: 0.033328 ms CreateObjectMapping: 0.020509 ms MarkObjects: 0.438392 ms  DeleteObjects: 0.027175 ms)
+
+Unloading 5 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 1.404395 ms
+
+Unloading 4 unused Assets to reduce memory usage. Loaded Objects now: 3340.
+Total: 4.185499 ms (FindLiveObjects: 0.184586 ms CreateObjectMapping: 0.124083 ms MarkObjects: 3.856319 ms  DeleteObjects: 0.019484 ms)
+
+Unloading 5 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 19.216993 ms
+
+Unloading 78 unused Assets to reduce memory usage. Loaded Objects now: 422.
+Total: 3.482019 ms (FindLiveObjects: 1.751008 ms CreateObjectMapping: 0.056914 ms MarkObjects: 1.608466 ms  DeleteObjects: 0.064605 ms)
+
+New Level load: 01_Start
+ 
+(Filename: C:/buildslave/unity/build/artifacts/generated/common/runtime/UnityEngineDebugBindings.gen.cpp Line: 42)
+
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 1.240318 ms
+
+Unloading 5 unused Assets to reduce memory usage. Loaded Objects now: 214.
+Total: 0.386093 ms (FindLiveObjects: 0.026662 ms CreateObjectMapping: 0.013843 ms MarkObjects: 0.334819 ms  DeleteObjects: 0.010767 ms)
+

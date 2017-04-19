@@ -1,0 +1,647 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+
+public class Board : MonoBehaviour {
+    public Sprite[] tokenPrefabs;
+    public Sprite[] terrainPrefabs;
+    public Sprite[] harbourPrefabs;
+    public Player player;
+    public Computer compPlayer1;
+    public Computer compPlayer2;
+    public Computer compPlayer3;
+    private bool evenHarbour = false;
+    private Dictionary<GameObject, GameObject> listOfSpotsAndTheirHarbours;
+
+    //-------------------------------------------------------------------------------
+    //Check methods to help with the generation of legal moves.
+    public bool CheckForConnectingSettlements(GameObject roadSpot, Color color)
+    {
+        for (int j = 1; j < 55; j++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + j);
+            if (SpotComparison(roadSpot, settlementSpot, 1)
+                && settlementSpot.GetComponent<Button>().colors.disabledColor == color) { return true; }
+        }
+        return false;
+    }
+
+    public bool CheckForConnectingRoads(GameObject spot, int type, bool initialRound1, bool initialRound2, Color colour) //0 for comparing road to road, 1 for settlement to road
+    {
+        if (type == 1 && (initialRound1 || initialRound2)) { return true; }
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject otherRoadSpot = GameObject.Find("Road Button " + i);
+            if (otherRoadSpot != spot)
+            {
+                if (SpotComparison(spot, otherRoadSpot, type) && otherRoadSpot.GetComponent<Button>().colors.disabledColor == colour)
+                {
+                    if (type == 1) { return true; }
+                    else if (!CheckIfOpponentsSettlementBlocksRoadPath(spot, otherRoadSpot, colour)) { return true; }
+                }
+            }
+        }
+        return false;
+    }
+
+
+    bool CheckIfOpponentsSettlementBlocksRoadPath(GameObject roadSpot, GameObject otherRoadSpot, Color playerColour)
+    {
+        for (int j = 1; j < 55; j++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + j);
+            ColorBlock settlementSpotColour = settlementSpot.GetComponent<Button>().colors;
+            Sprite settlementSpotSprite = settlementSpot.GetComponent<Image>().sprite;
+
+            bool check1 = SpotComparison(roadSpot, settlementSpot, 1);
+            bool check2 = SpotComparison(otherRoadSpot, settlementSpot, 1);
+
+            bool isSettlementInBetween = SpotComparison(roadSpot, settlementSpot, 1) && SpotComparison(otherRoadSpot, settlementSpot, 1);
+            bool doesSettlementBelongToPlayerOrNoOne = (settlementSpotColour.disabledColor == playerColour || settlementSpotSprite.name == "UISprite");
+
+            if (isSettlementInBetween && doesSettlementBelongToPlayerOrNoOne) { return false; }
+        }
+        return true;
+    }
+
+    public bool ObeysDistanceRule(GameObject settlementSpot)
+    {
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject otherSettlementSpot = GameObject.Find("Settlement/City button " + i);
+            if (otherSettlementSpot != settlementSpot
+                && SpotComparison(settlementSpot, otherSettlementSpot, 2)
+                && otherSettlementSpot.GetComponent<Image>().sprite.name != "UISprite") { return false; }
+        }
+        return true;
+    }
+
+    public GameObject GetSettlementConnectedWithRoad(GameObject roadSpot)
+    {
+        for (int j = 1; j < 55; j++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + j);
+            if (SpotComparison(roadSpot, settlementSpot, 1) && settlementSpot.GetComponent<Button>().colors.disabledColor == Color.red) { return settlementSpot; }
+        }
+        return null;
+    }
+
+    //-------------------------------------------------------------------------------
+    //Methods that deactivate buttons on the board
+    public void DeactivateSettlementPlacementsButtons()
+    {
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + i);
+            Button theButton = settlementSpot.GetComponent<Button>();
+            theButton.interactable = false;
+        }
+    }
+
+    public void DeactivateRoadPlacementButtons()
+    {
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject roadSpot = GameObject.Find("Road Button " + i);
+            Button theButton = roadSpot.GetComponent<Button>();
+            theButton.interactable = false;
+        }
+    }
+
+    public void DeactivateRobberPlacementButtons()
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject robberSpot = GameObject.Find("Move Robber Button " + i);
+            robberSpot.GetComponent<Button>().interactable = false;
+        }
+    }
+
+    //-------------------------------------------------------------------
+    //Getter and setter helper methods 
+    public Color GetPlayerColour(int player)
+    {
+        if (player == 1) { return Color.red; }
+        else if (player == 2) { return Color.yellow; }
+        else if (player == 3) { return Color.white; }
+        else if (player == 4) { return Color.blue; }
+        else { return Color.black; }
+    }
+
+    public int GetAmountOfResourcesFromHex(GameObject hex, Color playerColour)
+    {
+        int amount = 0;
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + i);
+
+            if (SpotComparison(settlementSpot, hex, 3) && settlementSpot.GetComponent<Button>().colors.disabledColor == playerColour)
+            {
+                if (settlementSpot.GetComponent<Image>().sprite.name == "Settlement White") { amount++; }
+                else { amount = amount + 2; }
+            }
+        }
+        return amount;
+    }
+
+    public string GetOriginalToken(int counter) { return PlayerPrefsManager.GetToken(counter); }
+
+    public void SetTokenToOriginal(int counter, string token) { GameObject.Find("Token " + counter).GetComponent<Image>().sprite = tokenPrefabs[GetIndexToken(token)]; }
+    public void SetTokenToRobber(GameObject token) { token.GetComponent<Image>().sprite = tokenPrefabs[10]; }
+
+    //------------------------------------------------------------------------
+    //Method for stealing a random resource from when a robber is moved by a player to a hex
+    public int StealResource(GameObject hex, Color colour)
+    {
+        List<GameObject> listOfChoicesToStealFrom = new List<GameObject>();
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + i);
+
+            if (SpotComparison(hex, settlementSpot, 3)
+                && settlementSpot.GetComponent<Button>().colors.disabledColor != colour
+                && CheckIfPlayerHasResourcesToGive(settlementSpot)) { listOfChoicesToStealFrom.Add(settlementSpot); }
+        }
+
+        int size = listOfChoicesToStealFrom.Count;
+        int resource = -1;
+        if (size != 0)
+        {
+            Color playerToStealFromColour = listOfChoicesToStealFrom[Random.RandomRange(0, size)].GetComponent<Button>().colors.disabledColor;
+            resource = SelectResourceToSteal(playerToStealFromColour);
+        }
+
+        return resource;
+    }
+
+    bool CheckIfPlayerHasResourcesToGive(GameObject settlementSpot)
+    {
+        Color playerColour = settlementSpot.GetComponent<Button>().colors.disabledColor;
+        if (playerColour == Color.red) { return player.GetTotalResourceCount() > 0; }
+        else if (playerColour == Color.yellow) { return compPlayer1.GetTotalResourceCount() > 0; }
+        else if (playerColour == Color.white) { return compPlayer2.GetTotalResourceCount() > 0; }
+        else if (playerColour == Color.blue) { return compPlayer3.GetTotalResourceCount() > 0; }
+        else { return false; }
+    }
+
+    int SelectResourceToSteal(Color playerToStealFromColour)
+    {
+        int resource = Random.RandomRange(1, 6);
+        if (playerToStealFromColour == Color.red)
+        {
+            while (!player.CheckIfGotOneResource(resource)) { resource = Random.RandomRange(1, 6); }
+            player.GainOrLoseResource(resource, -1);
+        }
+        else if (playerToStealFromColour == Color.yellow)
+        {
+            while (!compPlayer1.CheckIfGotOneResource(resource)) { resource = Random.RandomRange(1, 6); }
+            compPlayer1.GainOrLoseResource(resource, -1);
+        }
+        else if (playerToStealFromColour == Color.white)
+        {
+            while (!compPlayer2.CheckIfGotOneResource(resource)) { resource = Random.RandomRange(1, 6); }
+            compPlayer2.GainOrLoseResource(resource, -1);
+        }
+        else if (playerToStealFromColour == Color.blue)
+        {
+            while (!compPlayer3.CheckIfGotOneResource(resource)) { resource = Random.RandomRange(1, 6); }
+            compPlayer3.GainOrLoseResource(resource, -1);
+        }
+        else
+        {
+            resource = -1;
+        }
+        return resource;
+    }
+
+    //--------------------------------------------------------------------------------
+    //Method for when a monopoly card is used
+    public int GetAllOfSpecificResourceOthersHold(int playerNumber, int card)
+    {
+        int totalAmount = 0;
+        if (playerNumber != 1) { totalAmount = totalAmount + player.GetAmountOfResource(card); }
+        if (playerNumber != 2) { totalAmount = totalAmount + compPlayer1.GetAmountOfResource(card); }
+        if (playerNumber != 3) { totalAmount = totalAmount + compPlayer2.GetAmountOfResource(card); }
+        if (playerNumber != 4) { totalAmount = totalAmount + compPlayer3.GetAmountOfResource(card); }
+        return totalAmount;
+    }
+
+    public void MonopolyUsed(int playerNumber, int card)
+    {
+        if (playerNumber != 1) { player.LoseAllResourceMonopoly(card); }
+        if (playerNumber != 2) { compPlayer1.LoseAllResourceMonopoly(card); }
+        if (playerNumber != 3) { compPlayer2.LoseAllResourceMonopoly(card); }
+        if (playerNumber != 4) { compPlayer3.LoseAllResourceMonopoly(card); }
+    }
+
+    //--------------------------------------------------------------------------------------------------------
+    //Comparison method
+    public bool SpotComparison(GameObject spot, GameObject otherSpot, int type)
+    {
+        float spotPosX = spot.GetComponent<RectTransform>().localPosition.x;
+        float otherSpotPosX = otherSpot.GetComponent<RectTransform>().localPosition.x;
+        float spotPosY = spot.GetComponent<RectTransform>().localPosition.y;
+        float otherSpotPosY = otherSpot.GetComponent<RectTransform>().localPosition.y;
+
+        float diffX = spotPosX - otherSpotPosX;
+        float diffY = spotPosY - otherSpotPosY;
+        bool isNeighbourXDir = false;
+        bool isNeighbourYDir = false;
+
+        if (type == 0) //road to road comparison
+        {
+            isNeighbourXDir = (diffX > -65 && diffX < -55) || (diffX > 55 && diffX < 65) || (diffX > -35 && diffX < -25) || (diffX > 25 && diffX < 35);
+            isNeighbourYDir = (diffY > -50 && diffY < -40) || (diffY > 40 && diffY < 50) || (diffY > -5 && diffY < 5);
+        }
+        else if (type == 1) //road to settlement comparison
+        {
+            isNeighbourXDir = (diffX > -35 && diffX < -25) || (diffX > 25 && diffX < 35) || (diffX > -5 && diffX < 5);
+            isNeighbourYDir = (diffY > -35 && diffY < -25) || (diffY > 25 && diffY < 35) || (diffY > 10 && diffY < 20) || (diffY > -20 && diffY < -10);
+        }
+        else if (type == 2) //settlement to settlement comparison
+        {
+            isNeighbourXDir = (diffX > -65 && diffX < -55) || (diffX > 55 && diffX < 65) || (diffX > -5 && diffX < 5);
+            isNeighbourYDir = (diffY > -65 && diffY < -55) || (diffY > 55 && diffY < 65) || (diffY > 25 && diffY < 35) || (diffY > -35 && diffY < -25);
+        }
+        else if (type == 3) //settlement to hex comparison
+        {
+            isNeighbourXDir = (diffX > -65 && diffX < -55) || (diffX > 55 && diffX < 65) || (diffX > -5 && diffX < 5);
+            isNeighbourYDir = (diffY > -65 && diffY < -55) || (diffY > 55 && diffY < 65) || (diffY > -35 && diffY < -25) || (diffY > 25 && diffY < 35);
+        }
+
+        return isNeighbourXDir && isNeighbourYDir;
+    }
+
+    //------------------------------------------------------------------------------
+    //Method to calculate the longest road for a particular player
+
+    public int GetLongestRoad(int player)
+    {
+        Color playerColour = GetPlayerColour(player);
+        int longest = 0;
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject roadSpot = GameObject.Find("Road Button " + i);
+            Button theButton = roadSpot.GetComponent<Button>();
+            if (theButton.colors.disabledColor == playerColour)
+            {
+                List<GameObject> checkedRoadList = new List<GameObject>();
+                checkedRoadList.Add(roadSpot);
+                int count = GetAmountOfConnectingRoadPieces(roadSpot, playerColour, checkedRoadList, -1);
+                if (count > longest) { longest = count; }
+            }
+        }
+        return longest;
+    }
+
+    int GetAmountOfConnectingRoadPieces(GameObject roadSpot, Color playerColour, List<GameObject> checkedRoadList, int heading)
+    {
+        int totalCount = 1;
+        int upBranchCount = 0;
+        int upRightBranchCount = 0;
+        int rightBranchCount = 0;
+        int downRightBranchCount = 0;
+        int downBranchCount = 0;
+        int downLeftBranchCount = 0;
+        int leftBranchCount = 0;
+        int upLeftBranchCount = 0;
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject otherRoadSpot = GameObject.Find("Road Button " + i);
+            Button theButton = otherRoadSpot.GetComponent<Button>();
+            if (roadSpot != otherRoadSpot && !checkedRoadList.Contains(otherRoadSpot) && theButton.colors.disabledColor == playerColour)
+            {
+                if (SpotComparison(roadSpot, otherRoadSpot, 0)
+                    && !CheckIfOpponentsSettlementBlocksRoadPath(roadSpot, otherRoadSpot, playerColour)
+                    && CheckIfGoingTowardsHeading(roadSpot, otherRoadSpot, heading))
+                {
+                    checkedRoadList.Add(otherRoadSpot);
+                    int h = GetHeading(roadSpot, otherRoadSpot);
+                    if (h == 0) { upBranchCount        = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 0); }
+                    if (h == 1) { upRightBranchCount   = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 1); }
+                    if (h == 2) { rightBranchCount     = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 2); }
+                    if (h == 3) { downRightBranchCount = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 3); }
+                    if (h == 4) { downBranchCount      = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 4); }
+                    if (h == 5) { downLeftBranchCount  = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 5); }
+                    if (h == 6) { leftBranchCount      = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 6); }
+                    if (h == 7) { upLeftBranchCount    = 1 + GetAmountOfConnectingRoadPieces(otherRoadSpot, playerColour, checkedRoadList, 7); }
+                }
+            }
+        }
+        int[] allBranchCounts = new int[8];
+        allBranchCounts[0] = upBranchCount;
+        allBranchCounts[1] = upRightBranchCount;
+        allBranchCounts[2] = rightBranchCount;
+        allBranchCounts[3] = downRightBranchCount;
+        allBranchCounts[4] = downBranchCount;
+        allBranchCounts[5] = downLeftBranchCount;
+        allBranchCounts[6] = leftBranchCount;
+        allBranchCounts[7] = upLeftBranchCount;
+
+        totalCount = GetTheMost(allBranchCounts);
+        return totalCount;
+    }
+
+    int GetTheMost(int[] allBranchCounts)
+    {
+        int currMost = 0;
+        int most = 0;
+        for (int i = 1; i<allBranchCounts.Length; i++)
+        {
+            if (allBranchCounts[i] >= allBranchCounts[currMost])
+            {
+                most = allBranchCounts[i];
+                currMost = i;
+            }
+            else { most = allBranchCounts[currMost]; }
+        }
+        if (most < 1) { most = 1; }
+        return most;
+    }
+
+    int GetHeading(GameObject spot, GameObject otherSpot)
+    {
+        float spotPosX = spot.GetComponent<RectTransform>().localPosition.x;
+        float otherSpotPosX = otherSpot.GetComponent<RectTransform>().localPosition.x;
+        float spotPosY = spot.GetComponent<RectTransform>().localPosition.y;
+        float otherSpotPosY = otherSpot.GetComponent<RectTransform>().localPosition.y;
+
+        float diffX = spotPosX - otherSpotPosX;
+        float diffY = spotPosY - otherSpotPosY;
+        bool isFacingVertical= otherSpot.GetComponent<RectTransform>().eulerAngles.z == 90;
+        bool up        = ((diffX > -35 && diffX < -25) || (diffX > 25  && diffX < 35)) && (diffY > -50 && diffY < -40)  && isFacingVertical;
+        bool upRight   = ( diffX > -35 && diffX < -25) && (diffY > -50 && diffY < -40) && !isFacingVertical;
+        bool right     = ( diffX > -65 && diffX < -55) && (diffY > -5  && diffY <   5) && !isFacingVertical;
+        bool downRight = ( diffX > -35 && diffX < -25) && (diffY > 40  && diffY <  50) && !isFacingVertical;
+        bool down      = ((diffX > -35 && diffX < -25) || (diffX > 25  && diffX < 35)) && (diffY > 40  && diffY < 50)   && isFacingVertical;
+        bool downLeft  = ( diffX > 25  && diffX <  35) && (diffY > 40  && diffY <  50) && !isFacingVertical;
+        bool left      = ( diffX > 55  && diffX <  65) && (diffY > -5  && diffY <   5) && !isFacingVertical;
+        bool upLeft    = ( diffX > 25  && diffX <  35) && (diffY > -50 && diffY < -40) && !isFacingVertical;
+
+        if      (up)        { return 0;  }
+        else if (upRight)   { return 1;  }
+        else if (right)     { return 2;  }
+        else if (downRight) { return 3;  }
+        else if (down)      { return 4;  }
+        else if (downLeft)  { return 5;  }
+        else if (left)      { return 6;  }
+        else if (upLeft)    { return 7;  }
+        else                { return -1; }
+    }
+
+    bool CheckIfGoingTowardsHeading(GameObject spot, GameObject otherSpot, int heading)
+    {
+        int h = GetHeading(spot, otherSpot);
+
+        if      (heading == 0 || heading == 4) { return isInCorrectDiagonalDirection(spot, otherSpot, heading, h); }
+        else if (heading == 2 || heading == 6) { return ifOtherSpotIsAheadOrBehind(spot, otherSpot, heading, h); }
+        else if (heading == 1)                 { return h == 0 || h == 2; }
+        else if (heading == 3)                 { return h == 2 || h == 4; }
+        else if (heading == 5)                 { return h == 4 || h == 6; }
+        else if (heading == 7)                 { return h == 0 || h == 0; }
+        else                                   { return heading == -1; }
+    }
+
+    bool ifOtherSpotIsAheadOrBehind(GameObject spot, GameObject otherSpot, int currHeading, int headingOfNextSpot)
+    {
+        float spotPosX = spot.GetComponent<RectTransform>().localPosition.x;
+        float otherSpotPosX = otherSpot.GetComponent<RectTransform>().localPosition.x;
+        float spotPosY = spot.GetComponent<RectTransform>().localPosition.y;
+        float otherSpotPosY = otherSpot.GetComponent<RectTransform>().localPosition.y;
+
+        float diffX = spotPosX - otherSpotPosX;
+        float diffY = spotPosY - otherSpotPosY;
+        if      (headingOfNextSpot == 0) { return (currHeading == 2 && diffX < 0) || (currHeading == 6 && diffX > 0) && diffY < 0; }
+        else if (headingOfNextSpot == 4) { return (currHeading == 2 && diffX < 0) || (currHeading == 6 && diffX > 0) && diffY > 0; }
+        else                             { return currHeading == headingOfNextSpot; }
+    }
+
+    bool isInCorrectDiagonalDirection(GameObject spot, GameObject otherSpot, int currHeading, int headingOfNextSpot)
+    {
+        if      (currHeading == 0) { return headingOfNextSpot == 1 || headingOfNextSpot == 7; }
+        else if (currHeading == 4) { return headingOfNextSpot == 3 || headingOfNextSpot == 5; }
+        else return false;
+    }
+
+    //-------------------------------------------------------------------------------------------------------
+    //These methods are to help set up the trading window
+    public void GenerateLegalDHGiveButtons(int playerNumber, GameObject[] giveDHSelectionButtons, GameObject[] getDHSelectionButtons)
+    {
+        int playerBrickCount = player.GetBrickResourceCount();
+        int playerGrainCount = player.GetGrainResourceCount();
+        int playerLumberCount = player.GetLumberResourceCount();
+        int playerOreCount = player.GetOreResourceCount();
+        int playerWoolCount = player.GetWoolResourceCount();
+
+        GameObject.Find("TradePanel").GetComponent<RectTransform>().localPosition = new Vector3(0, 0, 0);
+        giveDHSelectionButtons[0].GetComponentInChildren<Text>().text  = playerBrickCount.ToString();
+        giveDHSelectionButtons[1].GetComponentInChildren<Text>().text  = playerGrainCount.ToString();
+        giveDHSelectionButtons[2].GetComponentInChildren<Text>().text = playerLumberCount.ToString();
+        giveDHSelectionButtons[3].GetComponentInChildren<Text>().text    = playerOreCount.ToString();
+        giveDHSelectionButtons[4].GetComponentInChildren<Text>().text   = playerWoolCount.ToString();
+
+        for (int i = 0; i< 5; i++)
+        {
+            giveDHSelectionButtons[i].GetComponent<Button>().interactable = false;
+            giveDHSelectionButtons[i].GetComponent<Image>().color = Color.white;
+            getDHSelectionButtons[i].GetComponent<Button>().interactable = false;
+            getDHSelectionButtons[i].GetComponent<Image>().color = Color.white;
+        }
+
+        int minimumBrickNeededToGive  = getMinimumNeededToGiveForResource(1, playerNumber);
+        int minimumGrainNeededToGive  = getMinimumNeededToGiveForResource(2, playerNumber);
+        int minimumLumberNeededToGive = getMinimumNeededToGiveForResource(3, playerNumber);
+        int minimumOreNeededToGive    = getMinimumNeededToGiveForResource(4, playerNumber);
+        int minimumWoolNeededToGive   = getMinimumNeededToGiveForResource(5, playerNumber);
+
+        if (playerBrickCount >= minimumBrickNeededToGive)   { GameObject.Find("Brick Card DH Give Button").GetComponent<Button>().interactable  = true; }
+        if (playerGrainCount >= minimumGrainNeededToGive)   { GameObject.Find("Grain Card DH Give Button").GetComponent<Button>().interactable  = true; }
+        if (playerLumberCount >= minimumLumberNeededToGive) { GameObject.Find("Lumber Card DH Give Button").GetComponent<Button>().interactable = true; }
+        if (playerOreCount >= minimumOreNeededToGive)       { GameObject.Find("Ore Card DH Give Button").GetComponent<Button>().interactable    = true; }
+        if (playerWoolCount >= minimumWoolNeededToGive)     { GameObject.Find("Wool Card DH Give Button").GetComponent<Button>().interactable   = true; }
+
+    }
+
+    public int getMinimumNeededToGiveForResource(int card, int playerNumber)
+    {
+        int minimum = 4;
+        string resource = "";
+        if      (card == 1) { resource = "Brick";  }
+        else if (card == 2) { resource = "Grain";  }
+        else if (card == 3) { resource = "Lumber"; }
+        else if (card == 4) { resource = "Ore";    }
+        else if (card == 5) { resource = "Wool";   }
+
+        foreach (KeyValuePair<GameObject, GameObject> keyValue in listOfSpotsAndTheirHarbours)
+        {
+            bool coloursMatch    = keyValue.Key.GetComponent<Button>().colors.disabledColor == GetPlayerColour(playerNumber);
+            bool correctResource = keyValue.Value.GetComponent<Image>().sprite.name.Contains(resource);
+            if (coloursMatch && correctResource)
+            {
+                return 2;
+            }
+            else if (coloursMatch && keyValue.Value.GetComponent<Image>().sprite.name.Contains("Any")){
+                minimum = 3;
+            }
+        }
+        return minimum;
+    }
+
+    //------------------------------------------------------------------------------
+    //Computer making trade method. Didn't know where else to put this.
+    public bool[] ComputerTradeOffer(int[] resourcesGiven, int[] resourcesWanted, int playerNumber)
+    {
+        bool[] responses = new bool[2];
+        int count = 0;
+        if (playerNumber != 2) { responses[count] = compPlayer1.GetTradeOffer(resourcesWanted, resourcesGiven); count++; }
+        if (playerNumber != 3) { responses[count] = compPlayer2.GetTradeOffer(resourcesWanted, resourcesGiven); count++; }
+        if (playerNumber != 4) { responses[count] = compPlayer3.GetTradeOffer(resourcesWanted, resourcesGiven); count++; }
+        player.GetTradeOffer(resourcesGiven, resourcesWanted, playerNumber);
+        return responses;
+    }
+
+    public void ComputerFinaliseTrade(int card, int resourceGiven, int resourceWanted, int playerNumber, int oppNumber)
+    {
+        if     (playerNumber == 2 && oppNumber > 1)  { oppNumber++; }
+        else if(playerNumber == 3 && oppNumber == 3) { oppNumber++; }
+        if(oppNumber == 1)
+        {
+            player.GainOrLoseResource(card, resourceGiven);
+            player.GainOrLoseResource(card, resourceWanted * -1); 
+        }
+        else if (oppNumber == 2)
+        {
+            compPlayer1.GainOrLoseResource(card, resourceGiven);
+            compPlayer1.GainOrLoseResource(card, resourceWanted * -1);
+        }
+        else if (oppNumber == 3)
+        {
+            compPlayer2.GainOrLoseResource(card, resourceGiven);
+            compPlayer2.GainOrLoseResource(card, resourceWanted * -1);
+        }
+        else if (oppNumber == 4)
+        {
+            compPlayer3.GainOrLoseResource(card, resourceGiven);
+            compPlayer3.GainOrLoseResource(card, resourceWanted * -1);
+        }
+    }
+
+    //--------------------------------------------------------------------------------------------------------
+    //This is for setting up the board at the start of the game
+    public void SetUpBoard()
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            //get terrain tiles
+            string terrain = PlayerPrefsManager.GetTerrainTile(i);
+            GameObject.Find("Hex " + i).GetComponent<Image>().sprite = terrainPrefabs[GetIndexTerrain(terrain)];
+
+            //get tokens
+            string token = PlayerPrefsManager.GetToken(i);
+            GameObject.Find("Token " + i).GetComponent<Image>().sprite = tokenPrefabs[GetIndexToken(token)];
+
+            //save harbours
+            if (i < 19)
+            {
+                string harbour = PlayerPrefsManager.GetHarbour(i);
+                if (harbour == "null")
+                {
+                    GameObject.Find("Harbour " + i).GetComponent<Image>().enabled     = false;
+                    GameObject.Find("Arrow " + i + "a").GetComponent<Image>().enabled = false;
+                    GameObject.Find("Arrow " + i + "b").GetComponent<Image>().enabled = false;
+                    if (GameObject.Find("Arrow " + i + "c")) { GameObject.Find("Arrow " + i + "c").GetComponent<Image>().enabled = false; }
+                }
+                else {
+                    GameObject.Find("Harbour " + i).GetComponent<Image>().sprite = harbourPrefabs[GetIndexHarbour(harbour)];
+                    if(i % 2 == 0) { evenHarbour = true; }
+                }
+            }
+        }
+        GenerateListOfSpotsNextToHarbours();
+    }
+
+    int GetIndexTerrain(string terrain)
+    {
+        if      (terrain == "Desert tile")   { return 0;  }
+        else if (terrain == "Field tile")    { return 1;  }
+        else if (terrain == "Forest tile")   { return 2;  }
+        else if (terrain == "Hill tile")     { return 3;  }
+        else if (terrain == "Mountain tile") { return 4;  }
+        else if (terrain == "Pasture tile")  { return 5;  }
+        else                                 { return -1; }
+    }
+
+    int GetIndexToken(string token)
+    {
+        if      (token == "2 token")  { return 0;  }
+        else if (token == "3 token")  { return 1;  }
+        else if (token == "4 token")  { return 2;  }
+        else if (token == "5 token")  { return 3;  }
+        else if (token == "6 token")  { return 4;  }
+        else if (token == "8 token")  { return 5;  }
+        else if (token == "9 token")  { return 6;  }
+        else if (token == "10 token") { return 7;  }
+        else if (token == "11 token") { return 8;  }
+        else if (token == "12 token") { return 9;  }
+        else if (token == "Robber")   { return 10; }
+        else                          { return -1; }
+    }
+
+    int GetIndexHarbour(string harbour)
+    {
+        if      (harbour == "2 for 1 Brick")  { return 0;  }
+        else if (harbour == "2 for 1 Grain")  { return 1;  }
+        else if (harbour == "2 for 1 Lumber") { return 2;  }
+        else if (harbour == "2 for 1 Ore")    { return 3;  }
+        else if (harbour == "2 for 1 Wool")   { return 4;  }
+        else if (harbour == "3 for 1 Any")    { return 5;  }
+        else                                  { return -1; }
+    }
+
+    void GenerateListOfSpotsNextToHarbours()
+    {
+        listOfSpotsAndTheirHarbours = new Dictionary<GameObject, GameObject>();
+        for (int i = 1; i < 19; i++)
+        {
+            if((evenHarbour && i % 2 == 0) || (!evenHarbour && i % 2 != 0))
+            {
+                GameObject harbour = GameObject.Find("Harbour " + i);
+                int[] spotsNearHarbour = GetSpotsNearHarbour(i);
+                for(int j=0; j < spotsNearHarbour.Length; j++)
+                {
+                    if(spotsNearHarbour[j] != -1) {
+                        GameObject spot = GameObject.Find("Settlement/City button " + spotsNearHarbour[j]);
+                        listOfSpotsAndTheirHarbours.Add(spot, harbour);
+                    }
+                }
+            }
+        }
+    }
+
+    int[] GetSpotsNearHarbour(int position)
+    {
+        int[] spotsNearHarbour = new int[3];
+        if      (position == 1)  { spotsNearHarbour[0] = 17; spotsNearHarbour[1] = 28; spotsNearHarbour[2] = -1; }
+        else if (position == 2)  { spotsNearHarbour[0] =  8; spotsNearHarbour[1] = 17; spotsNearHarbour[2] = 18; }
+        else if (position == 3)  { spotsNearHarbour[0] =  1; spotsNearHarbour[1] =  8; spotsNearHarbour[2] =  9; }
+        else if (position == 4)  { spotsNearHarbour[0] =  1; spotsNearHarbour[1] =  2; spotsNearHarbour[2] = -1; }
+        else if (position == 5)  { spotsNearHarbour[0] =  2; spotsNearHarbour[1] =  3; spotsNearHarbour[2] =  4; }
+        else if (position == 6)  { spotsNearHarbour[0] =  4; spotsNearHarbour[1] =  5; spotsNearHarbour[2] =  6; }
+        else if (position == 7)  { spotsNearHarbour[0] =  6; spotsNearHarbour[1] =  7; spotsNearHarbour[2] = -1; }
+        else if (position == 8)  { spotsNearHarbour[0] =  7; spotsNearHarbour[1] = 15; spotsNearHarbour[2] = 16; }
+        else if (position == 9)  { spotsNearHarbour[0] = 16; spotsNearHarbour[1] = 26; spotsNearHarbour[2] = 27; }
+        else if (position == 10) { spotsNearHarbour[0] = 27; spotsNearHarbour[1] = 38; spotsNearHarbour[2] = -1; }
+        else if (position == 11) { spotsNearHarbour[0] = 37; spotsNearHarbour[1] = 38; spotsNearHarbour[2] = 47; }
+        else if (position == 12) { spotsNearHarbour[0] = 46; spotsNearHarbour[1] = 47; spotsNearHarbour[2] = 54; }
+        else if (position == 13) { spotsNearHarbour[0] = 53; spotsNearHarbour[1] = 54; spotsNearHarbour[2] = -1; }
+        else if (position == 14) { spotsNearHarbour[0] = 51; spotsNearHarbour[1] = 52; spotsNearHarbour[2] = 53; }
+        else if (position == 15) { spotsNearHarbour[0] = 49; spotsNearHarbour[1] = 50; spotsNearHarbour[2] = 51; }
+        else if (position == 16) { spotsNearHarbour[0] = 48; spotsNearHarbour[1] = 49; spotsNearHarbour[2] = -1; }
+        else if (position == 17) { spotsNearHarbour[0] = 39; spotsNearHarbour[1] = 40; spotsNearHarbour[2] = 48; }
+        else if (position == 18) { spotsNearHarbour[0] = 28; spotsNearHarbour[1] = 29; spotsNearHarbour[2] = 39; }
+        else                     { spotsNearHarbour[0] = -1; spotsNearHarbour[1] = -1; spotsNearHarbour[2] = -1; }
+
+        return spotsNearHarbour;
+    }
+}

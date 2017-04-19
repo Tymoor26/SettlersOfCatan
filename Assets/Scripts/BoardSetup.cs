@@ -1,0 +1,389 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+
+//This class was loosely inspired by the unity tutorial:
+//Game development & design made fun. Learn C# using Unity 4.6 & Unity 5. Your first 7 2D & 3D games for web & mobile.
+//By Ben Tristem
+//On Udemy.com
+//Section 7 - Glitch Garden: A Plants vs Zombies Clone
+//Chapter 165 - Spawn Defenders To Grid
+//The part in particular that was loosely inspired by this is the OnMouseDown() method.
+//In the Unity udemy tutorial, a similar method was used to take whatever was selected
+//in the other button classes, and placing them onto the screen wherever the user selected them.
+//In this version it varies on what was selected and where the location was clicked by the user.
+//Since in my game there are multiple different button classes, I have to make sure that when
+//one has been selected, it acts accrodingly.
+
+//This class handles with everything on the board setup screen.
+//This ranges from the selectable board elements that can be placed on the interactive board
+//to the options found around the board like resetting the board, setting the default board
+//and confirming the board.
+public class BoardSetup : MonoBehaviour {
+    public int numberedSpot; //representing the spot on the board
+
+    //setting up what type of piece it is
+    private GameObject hex;
+    private GameObject token;
+    private GameObject harbour;
+
+    //keeping track of amount of harbours placed on the board
+    private static int amountOfHarbours=0;
+
+    // Use this for initialization
+    private void Start () {
+        if (numberedSpot > 0) //If its on the main game space part of the board. These are numbered from 1 to 19
+        {
+            hex = GameObject.Find("Hex " + numberedSpot);
+            token = GameObject.Find("Token " + numberedSpot);
+        }
+        else                  //If its a harbour thats on the water. On the editor I have these identified as a negative number from -1 to -18
+        {
+            int n = numberedSpot * -1;
+            harbour = GameObject.Find("Harbour " + n);
+        }
+        
+    }
+	
+	// Update is called once per frame
+    // This is constantly checking whether the board that has been set up is set up properly. Then it will allow the start button to work as intended.
+	private void Update () {
+        Button start = GameObject.Find("Start button").GetComponent<Button>();
+        if (CheckIfBoardIsFilled())
+        {
+            start.enabled = true;
+        }
+        else
+        {
+            start.enabled = false;
+        }
+	}
+
+    //This is called whenever a spot on the board has been click.
+    private void OnMouseDown()
+    {
+        if (numberedSpot > 0) //if a hex was clicked
+        {
+            if (TerrainButton.selectedTerrain) //if a terrain tile piece was selected
+            {
+                if (TerrainButton.selectedTerrain.name != "X") //if its not the delete terrain button that was pressed
+                {
+                    string terrCountStr = GameObject.Find(TerrainButton.selectedTerrain.name + " count").GetComponent<Text>().text;
+                    int terrCount = int.Parse(terrCountStr);
+                    if (terrCount > 0 && !GetComponent<Image>().sprite)                         //check if there are remaining pieces to be placed for this board element
+                    {
+                        GetComponent<Image>().sprite = TerrainButton.selectedTerrain;
+                        GetComponent<RectTransform>().localScale = new Vector3(1f, 1f, 1f);
+                        terrCount--;
+                        GameObject.Find(TerrainButton.selectedTerrain.name + " count").GetComponent<Text>().text = terrCount.ToString();
+
+                        //making sure that if a desert tile was pieced, then no numbered token can be placed on it
+                        if (GetComponent<Image>().sprite.name == "Desert tile") { token.GetComponent<Image>().enabled = false; }
+                        else                                                    { token.GetComponent<Image>().enabled = true;  }
+                    }
+                }
+                else if(TerrainButton.selectedTerrain.name == "X" && GetComponent<Image>().sprite) //if the delete terrain button was pressed and there happenes to be a piece on the board
+                {
+                    string terrCountStr = GameObject.Find(GetComponent<Image>().sprite.name + " count").GetComponent<Text>().text;
+                    int terrCount = int.Parse(terrCountStr);
+                    terrCount++;
+                    GameObject.Find(GetComponent<Image>().sprite.name + " count").GetComponent<Text>().text = terrCount.ToString();
+                    GetComponent<Image>().sprite = null;
+                    GetComponent<RectTransform>().localScale = new Vector3(0.5f, 0.5f, 0.5f);
+
+                    if (token.GetComponent<Image>().sprite)                                        //if there are any numbered tokens on the spot, make sure to remove them
+                    {
+                        string tokCountStr = GameObject.Find(token.GetComponent<Image>().sprite.name + " count").GetComponent<Text>().text;
+                        int tokCount = int.Parse(tokCountStr);
+                        tokCount++;
+                        GameObject.Find(token.GetComponent<Image>().sprite.name + " count").GetComponent<Text>().text = tokCount.ToString();
+                        token.GetComponent<Image>().sprite = null;
+                        token.GetComponent<RectTransform>().localScale = new Vector3(0.5f, 0.5f, 0.5f);
+                    }
+                }
+            }
+
+            if (TokenButton.selectedToken && TerrainButton.selectedTerrain)  //if a token button was selected
+            {
+                string tokCountStr = GameObject.Find(TokenButton.selectedToken.name + " count").GetComponent<Text>().text;
+                int tokCount = int.Parse(tokCountStr);
+
+                if (TokenButton.selectedToken && TerrainButton.selectedTerrain.name != "X" && GetComponent<Image>().sprite.name != "Desert tile" 
+                    && GetComponent<Image>().sprite && tokCount > 0 && !token.GetComponent<Image>().sprite) //add a numbered token to a board piece
+                {
+                    token.GetComponent<Image>().sprite = TokenButton.selectedToken;
+                    token.GetComponent<RectTransform>().localScale = new Vector3(1f, 1f, 1f);
+                    tokCount--;
+                    GameObject.Find(token.GetComponent<Image>().sprite.name + " count").GetComponent<Text>().text = tokCount.ToString();
+                }
+            }
+        }
+        else //if a harbour space was clicked
+        {
+            if (HarbourButton.selectedHarbour) //checking if one of the harbour buttons was selected
+            {
+                if (HarbourButton.selectedHarbour.name != "X") //checking if it was the delete button was selected
+                {
+                    string harbCountStr = GameObject.Find(HarbourButton.selectedHarbour.name + " count").GetComponent<Text>().text;
+                    int harbCount = int.Parse(harbCountStr);
+
+                    //checks for if there are enough harbours left to place and that its a legal spot and there isn't already a harbour placed there
+                    if (GetComponent<Image>().color == Color.blue && harbCount > 0 && !GetComponent<Image>().sprite)
+                    {
+                        int n = numberedSpot * -1;
+                        int r = n % 2;
+                        DeactivateHarbours(r); //Since you can't have harbours in adjacent spots, this makes sure that alternating spots are the only ones that are selectable
+                        GetComponent<Image>().sprite = HarbourButton.selectedHarbour;
+                        GetComponent<Image>().color = Color.white;
+                        amountOfHarbours++;
+                        harbCount--;
+                        GameObject.Find(HarbourButton.selectedHarbour.name + " count").GetComponent<Text>().text = harbCount.ToString();
+
+                    }
+                }
+                else if (HarbourButton.selectedHarbour.name == "X" && GetComponent<Image>().sprite) //if the delete harbour button is selected and there is a harbour on the spot
+                {
+                    string harbCountStr = GameObject.Find(GetComponent<Image>().sprite.name + " count").GetComponent<Text>().text;
+                    int harbCount = int.Parse(harbCountStr);
+                    harbCount++;
+                    GameObject.Find(GetComponent<Image>().sprite.name + " count").GetComponent<Text>().text = harbCount.ToString();
+                    GetComponent<Image>().sprite = null;
+                    GetComponent<Image>().color = Color.blue;
+                    amountOfHarbours--;
+
+                    if (amountOfHarbours == 0) { ResetHarbours(); } //In the event that there are no harbours placed, make sure to reset them all to be able to be selected
+                }
+            }
+        }
+    }
+
+    //when the first initial harbour is placed, this will grey out the other harbours spots such that no two harbours are ajacent to each other
+    private void DeactivateHarbours(int oddOrEven)
+    {
+        int count = 0;
+        if(oddOrEven == 0) { count = 1; }           //if even number, remove all odds
+        else if (oddOrEven == 1) { count = 2; }     //if odd number, remove all evens
+        while (count < 19)
+        {
+            GameObject.Find("Harbour " + count).GetComponent<Image>().color = Color.grey;
+            GameObject.Find("Harbour " + count).GetComponent<RectTransform>().localScale = new Vector3(0.5f, 0.5f, 0.5f);
+            count += 2;
+        }
+    }
+
+    //when there are no harbours, this makes sure that all harbour spots are made to be selectable
+    private void ResetHarbours()
+    {
+        for (int i = 1; i < 19; i++)
+        {
+            GameObject.Find("Harbour " + i).GetComponent<Image>().sprite = null;
+            GameObject.Find("Harbour " + i).GetComponent<Image>().color = Color.blue;
+            GameObject.Find("Harbour " + i).GetComponent<RectTransform>().localScale = new Vector3(1f, 1f, 1f);
+            amountOfHarbours = 0;
+        }
+    }
+    
+    //when the reset button is pressed
+    public void ResetBoard()
+    {
+        for (int i=1; i<20; i++)
+        {
+            //remove any terrain tiles
+            GameObject.Find("Hex " + i).GetComponent<Image>().sprite = null;
+            GameObject.Find("Hex " + i).GetComponent<RectTransform>().localScale = new Vector3(0.5f, 0.5f, 0.5f);
+
+            //remove any tokens
+            if (GameObject.Find("Token " + i))
+            {
+                GameObject.Find("Token " + i).GetComponent<Image>().sprite = null;
+                GameObject.Find("Token " + i).GetComponent<RectTransform>().localScale = new Vector3(0.5f, 0.5f, 0.5f);
+                GameObject.Find("Token " + i).GetComponent<Image>().enabled = true;
+            }
+
+            //remove any harbours
+            if (i < 19)
+            {
+                GameObject.Find("Harbour " + i).GetComponent<Image>().sprite = null;
+                GameObject.Find("Harbour " + i).GetComponent<Image>().color = Color.blue;
+                GameObject.Find("Harbour " + i).GetComponent<RectTransform>().localScale = new Vector3(1f, 1f, 1f);
+                amountOfHarbours = 0;
+            }
+        }
+        ResetCounters();
+    }
+
+    //resetting the text that show the counters for each board element
+    private void ResetCounters()
+    {
+        ResetTerrainCounters();
+        ResetTokenCounters();
+        ResetHarbourCounters();
+    }
+
+    private void ResetTerrainCounters()
+    {
+        GameObject.Find("Desert tile count").GetComponent<Text>().text = "1";
+        GameObject.Find("Field tile count").GetComponent<Text>().text = "4";
+        GameObject.Find("Forest tile count").GetComponent<Text>().text = "4";
+        GameObject.Find("Hill tile count").GetComponent<Text>().text = "3";
+        GameObject.Find("Mountain tile count").GetComponent<Text>().text = "3";
+        GameObject.Find("Pasture tile count").GetComponent<Text>().text = "4";
+
+    }
+
+    private void ResetTokenCounters()
+    {
+        for(int i = 2; i<13; i++)
+        {
+            if (i != 7)
+            {
+                if(i==2 || i == 12) { GameObject.Find(i + " token count").GetComponent<Text>().text = "1"; }
+                else                { GameObject.Find(i + " token count").GetComponent<Text>().text = "2"; }
+            }
+        }
+    }
+
+    private void ResetHarbourCounters()
+    {
+        GameObject.Find("2 for 1 Brick count").GetComponent<Text>().text = "1";
+        GameObject.Find("2 for 1 Grain count").GetComponent<Text>().text = "1";
+        GameObject.Find("2 for 1 Lumber count").GetComponent<Text>().text = "1";
+        GameObject.Find("2 for 1 Ore count").GetComponent<Text>().text = "1";
+        GameObject.Find("2 for 1 Wool count").GetComponent<Text>().text = "1";
+        GameObject.Find("3 for 1 Any count").GetComponent<Text>().text = "4";
+
+
+    }
+
+    //When the default board button is pressed, it does the following methods to set up the default board
+    public void SetDefaultBoard()
+    {
+        ResetBoard();
+        SetDefaultTerrain();
+        SetDefaultHarbour();
+    }
+
+    private void SetDefaultTerrain()
+    {
+        Sprite ds = GameObject.Find("Desert tile").GetComponent<SpriteRenderer>().sprite;
+        Sprite fi = GameObject.Find("Field tile").GetComponent<SpriteRenderer>().sprite;
+        Sprite fo = GameObject.Find("Forest tile").GetComponent<SpriteRenderer>().sprite;
+        Sprite hi = GameObject.Find("Hill tile").GetComponent<SpriteRenderer>().sprite;
+        Sprite mo = GameObject.Find("Mountain tile").GetComponent<SpriteRenderer>().sprite;
+        Sprite pa = GameObject.Find("Pasture tile").GetComponent<SpriteRenderer>().sprite;
+
+        Sprite t2 = GameObject.Find("2 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t3 = GameObject.Find("3 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t4 = GameObject.Find("4 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t5 = GameObject.Find("5 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t6 = GameObject.Find("6 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t8 = GameObject.Find("8 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t9 = GameObject.Find("9 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t10 = GameObject.Find("10 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t11 = GameObject.Find("11 token").GetComponent<SpriteRenderer>().sprite;
+        Sprite t12 = GameObject.Find("12 token").GetComponent<SpriteRenderer>().sprite;
+
+        PlaceHex(1, mo, t10);
+        PlaceHex(2, pa, t2);
+        PlaceHex(3, fo, t9);
+        PlaceHex(4, fi, t12);
+        PlaceHex(5, hi, t6);
+        PlaceHex(6, pa, t4);
+        PlaceHex(7, hi, t10);
+        PlaceHex(8, fi, t9);
+        PlaceHex(9, fo, t11);
+        PlaceHex(10, ds, null);
+        PlaceHex(11, fo, t3);
+        PlaceHex(12, mo, t8);
+        PlaceHex(13, fo, t8);
+        PlaceHex(14, mo, t3);
+        PlaceHex(15, fi, t4);
+        PlaceHex(16, pa, t5);
+        PlaceHex(17, hi, t5);
+        PlaceHex(18, fi, t6);
+        PlaceHex(19, pa, t11);
+
+        PutCountersToZero();
+    }
+
+    private void PlaceHex(int spot, Sprite terr, Sprite tok)
+    {
+        GameObject.Find("Hex " + spot).GetComponent<Image>().sprite = terr;
+        GameObject.Find("Hex " + spot).GetComponent<RectTransform>().localScale = new Vector3(1f, 1f, 1f);
+
+        //making sure that if a desert tile was pieced, then no numbered token can be placed on it
+        if (terr.name == "Desert tile" && !tok) { GameObject.Find("Token " + spot).GetComponent<Image>().enabled = false; }
+        else
+        {
+            GameObject.Find("Token " + spot).GetComponent<Image>().enabled = true;
+            GameObject.Find("Token " + spot).GetComponent<Image>().sprite = tok;
+            GameObject.Find("Token " + spot).GetComponent<RectTransform>().localScale = new Vector3(1f, 1f, 1f);
+        }
+    }
+
+    private void SetDefaultHarbour()
+    {
+        Sprite b241 = GameObject.Find("2 for 1 Brick").GetComponent<SpriteRenderer>().sprite;
+        Sprite g241 = GameObject.Find("2 for 1 Grain").GetComponent<SpriteRenderer>().sprite;
+        Sprite l241 = GameObject.Find("2 for 1 Lumber").GetComponent<SpriteRenderer>().sprite;
+        Sprite o241 = GameObject.Find("2 for 1 Ore").GetComponent<SpriteRenderer>().sprite;
+        Sprite w241 = GameObject.Find("2 for 1 Wool").GetComponent<SpriteRenderer>().sprite;
+        Sprite a241 = GameObject.Find("3 for 1 Any").GetComponent<SpriteRenderer>().sprite;
+
+        PlaceHarbour(2, l241);
+        PlaceHarbour(4, a241);
+        PlaceHarbour(6, g241);
+        PlaceHarbour(8, o241);
+        PlaceHarbour(10, a241);
+        PlaceHarbour(12, w241);
+        PlaceHarbour(14, a241);
+        PlaceHarbour(16, a241);
+        PlaceHarbour(18, b241);
+
+        DeactivateHarbours(0);
+        amountOfHarbours = 9;
+    }
+
+    private void PlaceHarbour(int spot, Sprite harb)
+    {
+        GameObject.Find("Harbour " + spot).GetComponent<Image>().sprite = harb;
+        GameObject.Find("Harbour " + spot).GetComponent<Image>().color  = Color.white;
+    }
+
+    private void PutCountersToZero()
+    {
+        GameObject.Find("Desert tile count").GetComponent<Text>().text   = "0";
+        GameObject.Find("Field tile count").GetComponent<Text>().text    = "0";
+        GameObject.Find("Forest tile count").GetComponent<Text>().text   = "0";
+        GameObject.Find("Hill tile count").GetComponent<Text>().text     = "0";
+        GameObject.Find("Mountain tile count").GetComponent<Text>().text = "0";
+        GameObject.Find("Pasture tile count").GetComponent<Text>().text  = "0";
+
+        for (int i = 2; i < 13; i++)
+        {
+            if (i != 7) { GameObject.Find(i + " token count").GetComponent<Text>().text = "0"; }
+        }
+
+        GameObject.Find("2 for 1 Brick count").GetComponent<Text>().text  = "0";
+        GameObject.Find("2 for 1 Grain count").GetComponent<Text>().text  = "0";
+        GameObject.Find("2 for 1 Lumber count").GetComponent<Text>().text = "0";
+        GameObject.Find("2 for 1 Ore count").GetComponent<Text>().text    = "0";
+        GameObject.Find("2 for 1 Wool count").GetComponent<Text>().text   = "0";
+        GameObject.Find("3 for 1 Any count").GetComponent<Text>().text    = "0";
+    }
+
+    //The update method is constantly using this method to check if the board has been properly filled
+    private bool CheckIfBoardIsFilled()
+    {
+        for (int i = 1; i< 19; i++)
+        {
+            Sprite hex = GameObject.Find("Hex " + i).GetComponent<Image>().sprite;
+            Sprite tok = GameObject.Find("Token " + i).GetComponent<Image>().sprite;
+
+            if (!hex) { return false; }
+            if (hex.name != "Desert tile" && !tok) { return false; }
+        }
+        if (amountOfHarbours < 9) { return false; }
+        return true;
+    }
+}

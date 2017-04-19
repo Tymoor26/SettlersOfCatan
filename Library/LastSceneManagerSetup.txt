@@ -1,0 +1,4 @@
+sceneSetups:
+- path: Assets/_Scenes/03_OpponentSetup.unity
+  isLoaded: 1
+  isActive: 1

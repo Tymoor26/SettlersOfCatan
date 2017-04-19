@@ -1,0 +1,432 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+
+public class Computer : MonoBehaviour {
+
+    public Sprite[] boardPieces;
+    public Board board;
+    public ScoreBoard scoreBoard;
+    private string oppSetting;
+    private Color oppColour;
+    private int playerNumber;
+    private int brickResourceCount = 0, grainResourceCount = 0, lumberResourceCount = 0, oreResourceCount = 0, woolResourceCount = 0;
+    private int roadBuildingDevCount = 0, monopolyDevCount = 0, yearOfPlentyDevCount = 0, knightDevCount = 0, victoryPointDevCount = 0;
+    private int totalResourceCardsInHand = 0;
+    private int totalDevCardsInHand = 0;
+    private int remainingRoadsToBuild = 25;
+    private int remainingSettlementsToBuild = 5;
+    private int remainingCitiesToBuild = 4;
+
+    public void SetSettings(string setting, Color color, int pNumber)
+    {
+        oppSetting = setting;
+        oppColour = color;
+        playerNumber = pNumber;
+    }
+
+    public void CompTurn()
+    {
+        if (Game.GetInitial1() || Game.GetInitial2()) { CompPlaceSettlement(); }
+        //make sure to add remaining pieces to build limits here
+    }
+
+
+    void CompPlaceSettlement()
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalSettlementPlacements();
+        int size = listOfValidSpots.Count;
+        GameObject settlementSpot =  listOfValidSpots[Random.Range(0, size)];
+        if (settlementSpot.GetComponent<Image>().sprite.name == "UISprite")
+        {
+            settlementSpot.GetComponent<Image>().sprite = boardPieces[0];
+            scoreBoard.SettlementPointScored(playerNumber);
+            if (!Game.GetInitial1() && !Game.GetInitial2())
+            {
+                brickResourceCount--;
+                lumberResourceCount--;
+                grainResourceCount--;
+                woolResourceCount--;
+                UpdateTotalResourceCardCount();
+            }
+            remainingSettlementsToBuild--;
+        }
+
+        Button theButton = settlementSpot.GetComponent<Button>();
+        ColorBlock theColor = settlementSpot.GetComponent<Button>().colors;
+        theColor.disabledColor = oppColour;
+
+        theButton.colors = theColor;
+        theButton.interactable = false;
+        if      (Game.GetInitial1()) { CompPlaceRoad();                     }
+        else if (Game.GetInitial2()) { CompPlaceSecondRoad(settlementSpot); }
+    }
+
+    void CompPlaceRoad()
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalRoadPlacements();
+        int size = listOfValidSpots.Count;
+        GameObject roadSpot = listOfValidSpots[Random.Range(0, size)];
+        Button theButton = roadSpot.GetComponent<Button>();
+        ColorBlock theColor = roadSpot.GetComponent<Button>().colors;
+        theColor.disabledColor = oppColour;
+        theButton.colors = theColor;
+        theButton.interactable = false;
+        scoreBoard.RoadPlaced(playerNumber);
+        remainingRoadsToBuild--;
+
+        if (!Game.GetInitial1() && !Game.GetInitial2())
+        {
+            brickResourceCount--;
+            lumberResourceCount--;
+            UpdateTotalResourceCardCount();
+        }
+    }
+
+    void CompPlaceCity()
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalCityPlacements();
+        int size = listOfValidSpots.Count;
+        GameObject citySpot = listOfValidSpots[Random.Range(0, size)];
+        citySpot.GetComponent<Image>().sprite = boardPieces[1];
+        scoreBoard.CityPointScored(playerNumber);
+
+        oreResourceCount = oreResourceCount - 3;
+        grainResourceCount = grainResourceCount - 2;
+        UpdateTotalResourceCardCount();
+
+        remainingSettlementsToBuild++;
+        remainingCitiesToBuild--;
+    }
+
+
+    public void ComputerBuildDevCard()
+    {
+        int[] listOfDevCards = GetListOfAvailableDevCards();
+        int p = Random.RandomRange(0, Game.GetTotalDevCardsRemaining());
+        int card = listOfDevCards[p];
+
+        oreResourceCount--;
+        woolResourceCount--;
+        grainResourceCount--;
+        UpdateTotalResourceCardCount();
+
+        if (card == 1)
+        {
+            roadBuildingDevCount++;
+            Game.RoadBuildingCardBuilt();
+        }
+        else if (card == 2)
+        {
+            monopolyDevCount++;
+            Game.MonopolyCardBuilt();
+        }
+        else if (card == 3)
+        {
+            yearOfPlentyDevCount++;
+            Game.YearOfPlentyCardBuilt();
+        }
+        else if (card == 4)
+        {
+            knightDevCount++;
+            Game.KnightCardBuilt();
+        }
+        else if (card == 5)
+        {
+            victoryPointDevCount++;
+            Game.VictoryPointCardBuilt();
+        }
+    }
+
+    int[] GetListOfAvailableDevCards()
+    {
+        int remainingDevCards = Game.GetTotalDevCardsRemaining();
+        int[] listOfDevCards = new int[remainingDevCards];
+        for (int i = 0; i < remainingDevCards; i++)
+        {
+            bool checker = false;
+            while (!checker)
+            {
+                int r = Random.RandomRange(1, 6);
+                if (r == 1 && Game.GetRoadBuildingCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 1;
+                    checker = true;
+                }
+                else if (r == 2 && Game.GetMonopolyCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 2;
+                    checker = true;
+                }
+                else if (r == 3 && Game.GetYearOfPlentyCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 3;
+                    checker = true;
+                }
+                else if (r == 4 && Game.GetKnightCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 4;
+                    checker = true;
+                }
+                else if (r == 5 && Game.GetVictoryPointCardsRemaining() > 0)
+                {
+                    listOfDevCards[i] = 5;
+                    checker = true;
+                }
+            }
+        }
+        return listOfDevCards;
+    }
+
+    List<GameObject> GenerateComputerLegalSettlementPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject settlementSpot = GameObject.Find("Settlement/City button " + i);
+            Button theButton = settlementSpot.GetComponent<Button>();
+            Color black = new Color(0, 0, 0, 0);
+            if (theButton.colors.disabledColor == black 
+                && board.ObeysDistanceRule(settlementSpot) 
+                && board.CheckForConnectingRoads(settlementSpot, 1, Game.GetInitial1(), Game.GetInitial2(), oppColour)) { listOfValidSpots.Add(settlementSpot); }
+        }
+        return listOfValidSpots;
+    }
+
+    List<GameObject> GenerateComputerLegalRoadPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject roadSpot = GameObject.Find("Road Button " + i);
+            Button theButton = roadSpot.GetComponent<Button>();
+            Color black = new Color(0, 0, 0, 0);
+            if (theButton.colors.disabledColor == black 
+                && (board.CheckForConnectingSettlements(roadSpot, oppColour) 
+                || board.CheckForConnectingRoads(roadSpot, 0, Game.GetInitial1(), Game.GetInitial2(), oppColour))) { listOfValidSpots.Add(roadSpot); }
+        }
+        return listOfValidSpots;
+    }
+
+    List<GameObject> GenerateComputerLegalCityPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 55; i++)
+        {
+            GameObject citySpot = GameObject.Find("Settlement/City button " + i);
+            Button theButton = citySpot.GetComponent<Button>();
+            if (theButton.colors.disabledColor == oppColour && citySpot.GetComponent<Image>().sprite == boardPieces[0]) { listOfValidSpots.Add(citySpot); }
+        }
+        return listOfValidSpots;
+    }
+
+    public void GetResources(int roll)
+    {
+        for (int i = 1; i<20; i++)
+        {
+            GameObject token = GameObject.Find("Token " + i);
+            string tokenName = roll + " token";
+            if (token.GetComponent<Image>().sprite.name == tokenName)
+            {
+                GameObject hex = GameObject.Find("Hex " + i);
+                int amountOfResources = board.GetAmountOfResourcesFromHex(hex, oppColour);
+                UpdateResourceCountsWithGivenHex(hex, amountOfResources);
+            }
+        }
+    }
+
+    void UpdateResourceCountsWithGivenHex(GameObject hex, int amountOfResources)
+    {
+        if      (hex.GetComponent<Image>().sprite.name == "Pasture tile" ) { woolResourceCount   = woolResourceCount   + amountOfResources; }
+        else if (hex.GetComponent<Image>().sprite.name == "Field tile"   ) { grainResourceCount  = grainResourceCount  + amountOfResources; }
+        else if (hex.GetComponent<Image>().sprite.name == "Forest tile"  ) { lumberResourceCount = lumberResourceCount + amountOfResources; }
+        else if (hex.GetComponent<Image>().sprite.name == "Hill tile"    ) { brickResourceCount  = brickResourceCount  + amountOfResources; }
+        else if (hex.GetComponent<Image>().sprite.name == "Mountain tile") { oreResourceCount    = oreResourceCount    + amountOfResources; }
+        UpdateTotalResourceCardCount();
+    }
+
+    void UpdateTotalResourceCardCount() { totalResourceCardsInHand = brickResourceCount + grainResourceCount + lumberResourceCount + oreResourceCount + woolResourceCount;}
+
+    public void MoveRobber()
+    {
+        List<GameObject> listOfValidSpots = GenerateRobberPlacements();
+        int size = listOfValidSpots.Count;
+        int newSpot = Random.Range(0, size);
+        GameObject newRobberSpot = listOfValidSpots[newSpot];
+        GameObject oldRobberSpot = GameObject.Find("Token 1");
+        int counter = 0;
+
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject token = GameObject.Find("Token " + i);
+            if (token.GetComponent<Image>().sprite.name == "Robber" && !(token.GetComponent<Image>().color == new Color(1, 1, 1, 0)))
+            {
+                oldRobberSpot = token;
+                counter = i;
+            }
+        }
+
+        string oldRobberSpotToken = board.GetOriginalToken(counter);
+        if (oldRobberSpotToken == "Robber") { oldRobberSpot.GetComponent<Image>().color = new Color(1, 1, 1, 0); }
+        else                                { board.SetTokenToOriginal(counter, oldRobberSpotToken);             }
+
+        board.SetTokenToRobber(newRobberSpot);
+        newRobberSpot.GetComponent<Image>().color = new Color(1, 1, 1, 1);
+        GainOrLoseResource(board.StealResource(GameObject.Find("Hex " + newSpot), oppColour), 1);
+    }
+
+    public List<GameObject> GenerateRobberPlacements()
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject token = GameObject.Find("Token " + i);
+            if (token.GetComponent<Image>().sprite.name != "Robber" 
+                || token.GetComponent<Image>().color == new Color(1, 1, 1, 0)) { listOfValidSpots.Add(token); }
+        }
+        return listOfValidSpots;
+    }
+
+    public void GainOrLoseResource(int card, int amount)
+    {
+        if      (card == 1) { brickResourceCount  = brickResourceCount  + amount; }
+        else if (card == 2) { grainResourceCount  = grainResourceCount  + amount; }
+        else if (card == 3) { lumberResourceCount = lumberResourceCount + amount; }
+        else if (card == 4) { oreResourceCount    = oreResourceCount    + amount; }
+        else if (card == 5) { woolResourceCount   = woolResourceCount   + amount; }
+        UpdateTotalResourceCardCount();
+    }
+
+    public void LoseHalfCards()
+    {
+        if (totalResourceCardsInHand > 7)
+        {
+            int count = totalResourceCardsInHand / 2;
+            for (int i = count; i > 0; i--)
+            {
+                int card = Random.RandomRange(1, 6);
+                while (!CheckIfGotOneResource(card))
+                {
+                    card = Random.RandomRange(1, 6);
+                }
+                GainOrLoseResource(card, -1);
+            }
+        }
+    }
+
+    public bool CheckIfGotOneResource(int card)
+    {
+        if      (card == 1) { return (brickResourceCount > 0);  }
+        else if (card == 2) { return (grainResourceCount > 0);  }
+        else if (card == 3) { return (lumberResourceCount > 0); }
+        else if (card == 4) { return (oreResourceCount > 0);    }
+        else if (card == 5) { return (woolResourceCount > 0);   }
+        else                { return false;                     }
+    }
+
+    //-----------------------------------------------------------------------------
+    //Getters and setters method for the variables
+
+    int GetRemainingRoadBuildCount()       { return remainingRoadsToBuild;       }
+    int GetRemainingSettlementBuildCount() { return remainingSettlementsToBuild; }
+    int GetRemainingCitiesBuildCount()     { return remainingCitiesToBuild;      }
+
+    public int GetBrickResourceCount()  { return brickResourceCount;  }
+    public int GetGrainResourceCount()  { return grainResourceCount;  }
+    public int GetLumberResourceCount() { return lumberResourceCount; }
+    public int GetOreResourceCount()    { return oreResourceCount;    }
+    public int GetWoolResourceCount()   { return woolResourceCount;   }
+
+    public int GetAmountOfResource(int card)
+    {
+        if      (card == 1) { return brickResourceCount;  }
+        else if (card == 2) { return grainResourceCount;  }
+        else if (card == 3) { return lumberResourceCount; }
+        else if (card == 4) { return oreResourceCount;    }
+        else if (card == 5) { return woolResourceCount;   }
+        else                { return -1;                  }
+    }
+
+    public void LoseAllResourceMonopoly(int card)
+    {
+        if      (card == 1) { brickResourceCount = 0;  }
+        else if (card == 2) { grainResourceCount = 0;  }
+        else if (card == 3) { lumberResourceCount = 0; }
+        else if (card == 4) { oreResourceCount = 0;    }
+        else if (card == 5) { woolResourceCount = 0;   }
+        UpdateTotalResourceCardCount();
+    }
+
+    //------------------------------------------------------------------------------------------------
+    //only called by the board class.
+    public int GetTotalDevCardCount()  { return totalDevCardsInHand;      }
+    public int GetTotalResourceCount() { return totalResourceCardsInHand; }
+
+    //------------------------------------------------------------------------------------------------
+    //only occurs once, at the beginning of the game
+    void CompPlaceSecondRoad(GameObject settlementSpot)
+    {
+        List<GameObject> listOfValidSpots = GenerateComputerLegalRoadsSecondPlacements(settlementSpot);
+        int size = listOfValidSpots.Count;
+        GameObject roadSpot = listOfValidSpots[Random.Range(0, size)];
+        Button theButton = roadSpot.GetComponent<Button>();
+        ColorBlock theColor = roadSpot.GetComponent<Button>().colors;
+        theColor.disabledColor = oppColour;
+        theButton.colors = theColor;
+        theButton.interactable = false;
+        scoreBoard.RoadPlaced(playerNumber);
+        remainingRoadsToBuild--;
+        GetInitialResources(settlementSpot);
+    }
+
+    List<GameObject> GenerateComputerLegalRoadsSecondPlacements(GameObject settlementSpot)
+    {
+        List<GameObject> listOfValidSpots = new List<GameObject>();
+        for (int i = 1; i < 73; i++)
+        {
+            GameObject roadSpot = GameObject.Find("Road Button " + i);
+            Button theButton = roadSpot.GetComponent<Button>();
+            Color black = new Color(0, 0, 0, 0);
+            if (theButton.colors.disabledColor == black)
+            {
+                float spotPosX      = roadSpot.GetComponent<RectTransform>().localPosition.x;
+                float otherSpotPosX = settlementSpot.GetComponent<RectTransform>().localPosition.x;
+                float spotPosY      = roadSpot.GetComponent<RectTransform>().localPosition.y;
+                float otherSpotPosY = settlementSpot.GetComponent<RectTransform>().localPosition.y;
+
+                float diffX = spotPosX - otherSpotPosX;
+                float diffY = spotPosY - otherSpotPosY;
+
+                bool isNeighbourXDir = (diffX > -35 && diffX < -25) || (diffX > 25 && diffX < 35) || (diffX > -5 && diffX < 5);
+                bool isNeighbourYDir = (diffY > -35 && diffY < -25) || (diffY > 25 && diffY < 35) || (diffY > 10 && diffY < 20) || (diffY > -20 && diffY < -10);
+
+                if (isNeighbourXDir && isNeighbourYDir) { listOfValidSpots.Add(roadSpot); }
+            }
+        }
+        return listOfValidSpots;
+    }
+
+    void GetInitialResources(GameObject settlementSpot)
+    {
+        for (int i = 1; i < 20; i++)
+        {
+            GameObject hex = GameObject.Find("Hex " + i);
+            Button theButton = settlementSpot.GetComponent<Button>();
+
+            float spotPosX      = settlementSpot.GetComponent<RectTransform>().localPosition.x;
+            float otherSpotPosX = hex.GetComponent<RectTransform>().localPosition.x;
+            float spotPosY      = settlementSpot.GetComponent<RectTransform>().localPosition.y;
+            float otherSpotPosY = hex.GetComponent<RectTransform>().localPosition.y;
+
+            float diffX = spotPosX - otherSpotPosX;
+            float diffY = spotPosY - otherSpotPosY;
+
+            bool isNeighbourXDir = (diffX > -65 && diffX < -55) || (diffX > 55 && diffX < 65) || (diffX > -5 && diffX < 5);
+            bool isNeighbourYDir = (diffY > -65 && diffY < -55) || (diffY > 55 && diffY < 65) || (diffY > -35 && diffY < -25) || (diffY > 25 && diffY < 35);
+
+            if (isNeighbourXDir && isNeighbourYDir) { UpdateResourceCountsWithGivenHex(hex,1); }
+        }
+        UpdateTotalResourceCardCount();
+    }
+}

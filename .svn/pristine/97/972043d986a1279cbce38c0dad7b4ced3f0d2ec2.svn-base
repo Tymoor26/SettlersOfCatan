@@ -1,0 +1,29 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+
+public class TokenButton : MonoBehaviour {
+    public Sprite tokenPrefab;
+    public static Sprite selectedToken;
+
+    private TokenButton[] buttonArray;
+
+    // Use this for initialization
+    void Start()
+    {
+        buttonArray = GameObject.FindObjectsOfType<TokenButton>();
+    }
+
+    void OnMouseDown()
+    {
+        foreach (TokenButton thisButton in buttonArray)
+        {
+            if (thisButton.GetComponent<SpriteRenderer>().color.a > 0.5f)
+            {
+                thisButton.GetComponent<SpriteRenderer>().color -= new Color(0, 0, 0, 0.5f);
+            }
+        }
+        GetComponent<SpriteRenderer>().color += new Color(0, 0, 0, 0.5f);
+        selectedToken = tokenPrefab;
+    }
+}

@@ -1,0 +1,543 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+
+public class AI : MonoBehaviour {
+
+    private string aiSetting;
+    private int playerNumber;
+    private Board board;
+    private bool[] resourcesWanted = new bool[5];
+    private bool[] resourcesWantedDMtrade = new bool[5];
+    private bool[] resourcesWillingToGiveDMtrade = new bool[5];
+    private int[] resourcesWantedPtrade = new int[5];
+    private int[] resourcesWillingToGivePtrade = new int[5];
+    private string priority;
+    private bool everyoneRejectedLastPlayerTrade;
+
+    public void SetSettings(string setting, Board givenBoard, int pNumber)
+    {
+        aiSetting = setting;
+        print(setting);
+        playerNumber = pNumber;
+        board = givenBoard;
+        priority = "any";
+        everyoneRejectedLastPlayerTrade = false;
+        ResetResourceArrays();
+        if (setting == "Quick Thinker") { SetResourceWantedArray("settlement"); }
+    }
+
+    private void ResetResourceArrays()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            resourcesWanted[i] = false;
+            resourcesWantedDMtrade[i] = false;
+            resourcesWillingToGiveDMtrade[i] = false;
+            resourcesWantedPtrade[i] = 0;
+            resourcesWillingToGivePtrade[i] = 0;
+        }
+    }
+
+    private void ResetTradeWantResourceArrays()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            resourcesWantedDMtrade[i] = false;
+            resourcesWantedPtrade[i] = 0;
+        }
+    }
+
+    //----------------------------------------------
+    //select move method
+    public int SelectMoveToMake(List<int> listOfLegalMoves, 
+        int amountOfLegalSettlementPlacements, int amountOfLegalRoadPlacements, int amountOfLegalCityPlacements, int TotalDevCardsRemaining,
+        int[] resourcesCurrentlyHolding, int totalResourceCardsInHand,
+        int remainingRoadsToBuild, int remainingSettlementsToBuild, int remainingCitiesToBuild)
+    {
+        print("before");
+        for(int i= 0; i<5; i++)
+        {
+            print(resourcesWillingToGivePtrade[i]);
+        }
+        ResetResourceArrays();
+        priority = SetPriorityForTrading(listOfLegalMoves,
+            amountOfLegalSettlementPlacements, amountOfLegalRoadPlacements, amountOfLegalCityPlacements, TotalDevCardsRemaining,
+            resourcesCurrentlyHolding, totalResourceCardsInHand,
+            remainingRoadsToBuild, remainingSettlementsToBuild, remainingCitiesToBuild);
+        SetResourceWantedArray(priority);
+        print("after");
+        for (int i = 0; i < 5; i++)
+        {
+            print(resourcesWillingToGivePtrade[i]);
+        }
+        if      (listOfLegalMoves.Contains(5)) { return 5; }
+        else if (listOfLegalMoves.Contains(6)) { return 6; }
+        else if (listOfLegalMoves.Contains(7)) { return 7; }
+        else if (listOfLegalMoves.Contains(8)) { return 8; }
+        else if (listOfLegalMoves.Contains(9)) { return 9; }
+        else
+        {
+            return GenerateBuildPlan(listOfLegalMoves,
+                amountOfLegalSettlementPlacements, amountOfLegalRoadPlacements, amountOfLegalCityPlacements, TotalDevCardsRemaining,
+                resourcesCurrentlyHolding, totalResourceCardsInHand,
+                remainingRoadsToBuild, remainingSettlementsToBuild, remainingCitiesToBuild, priority);
+        }
+    }
+
+    string SetPriorityForTrading(List<int> listOfLegalMoves,
+    int amountOfLegalSettlementPlacements, int amountOfLegalRoadPlacements, int amountOfLegalCityPlacements, int totalDevCardsRemaining,
+    int[] resourcesCurrentlyHolding, int totalResourceCardsInHand,
+    int remainingRoadsToBuild, int remainingSettlementsToBuild, int remainingCitiesToBuild)
+    {
+        if (aiSetting == "Random") { return "any"; }
+
+        if (aiSetting == "Quick Thinker")
+        {
+            if      (checkHowManyDifferentResourcesNeededForSettlement(resourcesCurrentlyHolding) == 1 && amountOfLegalSettlementPlacements > 0 && remainingSettlementsToBuild > 0) { return "settlement"; }
+            else if (checkHowManyDifferentResourcesNeededForCity(resourcesCurrentlyHolding)       == 1 && amountOfLegalCityPlacements > 0 && remainingCitiesToBuild > 0) { return "city"; }
+            else if (checkHowManyDifferentResourcesNeededForRoad(resourcesCurrentlyHolding)       == 1 && amountOfLegalSettlementPlacements == 0 && amountOfLegalRoadPlacements > 0 && remainingRoadsToBuild > 0) { return "road"; }
+            else if (checkHowManyDifferentResourcesNeededForDevCard(resourcesCurrentlyHolding)    == 1 && totalDevCardsRemaining > 0) { return "dev card"; }
+        }
+
+        return "any";
+    }
+
+    private int GenerateBuildPlan(List<int> listOfLegalMoves,
+        int amountOfLegalSettlementPlacements, int amountOfLegalRoadPlacements, int amountOfLegalCityPlacements, int totalDevCardsRemaining,
+        int[] resourcesCurrentlyHolding, int totalResourceCardsInHand,
+        int remainingRoadsToBuild, int remainingSettlementsToBuild, int remainingCitiesToBuild, string priority)
+    {
+        int tradeType = -1;
+        print("priority: " + priority);
+        if (aiSetting == "Random")
+        {
+            int m = listOfLegalMoves[Random.RandomRange(0, listOfLegalMoves.Count)];
+            if (m == 10 || m == 11) { tradeType = SetUpPossibleTrade(resourcesCurrentlyHolding, priority); }
+            else { return m; }
+
+            if (tradeType == 0) { return 10; }
+            else if (tradeType == 1) { return 11; }
+            else { return 0; }
+        }
+
+        if (aiSetting == "Quick Thinker")
+        {
+            if      (listOfLegalMoves.Contains(3)) { return 3; }
+            else if (listOfLegalMoves.Contains(2)) { return 2; }
+            else if (listOfLegalMoves.Contains(1) && amountOfLegalSettlementPlacements == 0) { return 1; }
+            else if (listOfLegalMoves.Contains(4)) { return 4; }
+            else if (!everyoneRejectedLastPlayerTrade) { tradeType = SetUpPossibleTrade(resourcesCurrentlyHolding, priority); }
+
+            if      (tradeType == 0) { return 10; }
+            else if (tradeType == 1) { return 11; }
+            else                     { return 0;  }
+        }
+        return 0;
+
+    }
+
+    public void LastPlayerTradeFailed()     { everyoneRejectedLastPlayerTrade = true;  }
+    public void ResetLastPlayerTradeCheck() { everyoneRejectedLastPlayerTrade = false; }
+
+    private int checkHowManyDifferentResourcesNeededForSettlement(int[] resourcesCurrentlyHolding)
+    {
+        ResetTradeWantResourceArrays();
+        int count = 0;
+        if (resourcesCurrentlyHolding[0] == 0) { count++; resourcesWantedDMtrade[0] = true; resourcesWantedPtrade[0] = 1; }
+        if (resourcesCurrentlyHolding[1] == 0) { count++; resourcesWantedDMtrade[1] = true; resourcesWantedPtrade[1] = 1; }
+        if (resourcesCurrentlyHolding[2] == 0) { count++; resourcesWantedDMtrade[2] = true; resourcesWantedPtrade[2] = 1; }
+        if (resourcesCurrentlyHolding[4] == 0) { count++; resourcesWantedDMtrade[4] = true; resourcesWantedPtrade[4] = 1; }
+        return count;
+    }
+
+    private int checkHowManyDifferentResourcesNeededForCity(int[] resourcesCurrentlyHolding)
+    {
+        ResetTradeWantResourceArrays();
+        int count = 0;
+        if (resourcesCurrentlyHolding[1] < 2) { count = 2 - resourcesCurrentlyHolding[1]; resourcesWantedDMtrade[1] = true; resourcesWantedPtrade[1] = 1; }
+        if (resourcesCurrentlyHolding[3] < 3) { count = 3 - resourcesCurrentlyHolding[3]; resourcesWantedDMtrade[3] = true; resourcesWantedPtrade[3] = 1; }
+        return count;
+    }
+
+    private int checkHowManyDifferentResourcesNeededForRoad(int[] resourcesCurrentlyHolding)
+    {
+        ResetTradeWantResourceArrays();
+        int count = 0;
+        if (resourcesCurrentlyHolding[0] == 0) { count++; resourcesWantedDMtrade[0] = true; resourcesWantedPtrade[0] = 1; }
+        if (resourcesCurrentlyHolding[2] == 0) { count++; resourcesWantedDMtrade[2] = true; resourcesWantedPtrade[2] = 1; }
+        return count;
+    }
+
+    private int checkHowManyDifferentResourcesNeededForDevCard(int[] resourcesCurrentlyHolding)
+    {
+        ResetTradeWantResourceArrays();
+        int count = 0;
+        if (resourcesCurrentlyHolding[1] == 0) { count++; resourcesWantedDMtrade[1] = true; resourcesWantedPtrade[1] = 1; }
+        if (resourcesCurrentlyHolding[3] == 0) { count++; resourcesWantedDMtrade[3] = true; resourcesWantedPtrade[3] = 1; }
+        if (resourcesCurrentlyHolding[4] == 0) { count++; resourcesWantedDMtrade[4] = true; resourcesWantedPtrade[4] = 1; }
+        return count;
+    }
+
+    private int SetUpPossibleTrade(int[] resourcesCurrentlyHolding, string pieceToBuild)
+    {
+        if      (IsDMtradePossible(resourcesCurrentlyHolding, pieceToBuild))     { return 0; }
+        else if (IsPlayerTradePossible(resourcesCurrentlyHolding, pieceToBuild)) { return 1; }
+        else { return -1; }
+    }
+
+    private void SetResourceWantedArray(string pieceToBuild)
+    {
+        if (pieceToBuild == "settlement")
+        {
+            resourcesWanted[0] = true;
+            resourcesWanted[1] = true;
+            resourcesWanted[2] = true;
+            resourcesWanted[4] = true;
+        }
+        else if (pieceToBuild == "road")
+        {
+            resourcesWanted[0] = true;
+            resourcesWanted[2] = true;
+        }
+        else if (pieceToBuild == "city")
+        {
+            resourcesWanted[1] = true;
+            resourcesWanted[3] = true;
+        }
+        else if (pieceToBuild == "dev card")
+        {
+            resourcesWanted[1] = true;
+            resourcesWanted[3] = true;
+            resourcesWanted[4] = true;
+        }
+    }
+
+    private bool IsDMtradePossible(int[] resourcesCurrentlyHolding, string pieceToBuild)
+    {
+        int minimumDMbrick  = board.getMinimumNeededToGiveForResource(1, playerNumber);
+        int minimumDMgrain  = board.getMinimumNeededToGiveForResource(2, playerNumber);
+        int minimumDMlumber = board.getMinimumNeededToGiveForResource(3, playerNumber);
+        int minimumDMore    = board.getMinimumNeededToGiveForResource(4, playerNumber);
+        int minimumDMwool   = board.getMinimumNeededToGiveForResource(5, playerNumber);
+
+        if (pieceToBuild == "settlement")
+        {
+            if      (resourcesCurrentlyHolding[3] >= minimumDMore        && !resourcesWantedDMtrade[3]) { resourcesWillingToGiveDMtrade[3] = true; }
+            else if (resourcesCurrentlyHolding[0] - 1 >= minimumDMbrick  && !resourcesWantedDMtrade[0]) { resourcesWillingToGiveDMtrade[0] = true; }
+            else if (resourcesCurrentlyHolding[1] - 1 >= minimumDMgrain  && !resourcesWantedDMtrade[1]) { resourcesWillingToGiveDMtrade[1] = true; }
+            else if (resourcesCurrentlyHolding[2] - 1 >= minimumDMlumber && !resourcesWantedDMtrade[2]) { resourcesWillingToGiveDMtrade[2] = true; }
+            else if (resourcesCurrentlyHolding[4] - 1 >= minimumDMwool   && !resourcesWantedDMtrade[4]) { resourcesWillingToGiveDMtrade[4] = true; }
+        }
+        else if (pieceToBuild == "road")
+        {
+            if      (resourcesCurrentlyHolding[1] >= minimumDMgrain      && !resourcesWantedDMtrade[1]) { resourcesWillingToGiveDMtrade[1] = true; }
+            else if (resourcesCurrentlyHolding[3] >= minimumDMore        && !resourcesWantedDMtrade[3]) { resourcesWillingToGiveDMtrade[3] = true; }
+            else if (resourcesCurrentlyHolding[4] >= minimumDMwool       && !resourcesWantedDMtrade[4]) { resourcesWillingToGiveDMtrade[4] = true; }
+            else if (resourcesCurrentlyHolding[0] - 1 >= minimumDMbrick  && !resourcesWantedDMtrade[0]) { resourcesWillingToGiveDMtrade[0] = true; }
+            else if (resourcesCurrentlyHolding[2] - 1 >= minimumDMlumber && !resourcesWantedDMtrade[2]) { resourcesWillingToGiveDMtrade[2] = true; }
+        }
+        else if (pieceToBuild == "city")
+        {
+            if      (resourcesCurrentlyHolding[0] >= minimumDMbrick     && !resourcesWantedDMtrade[0]) { resourcesWillingToGiveDMtrade[0] = true; }
+            else if (resourcesCurrentlyHolding[2] >= minimumDMlumber    && !resourcesWantedDMtrade[2]) { resourcesWillingToGiveDMtrade[2] = true; }
+            else if (resourcesCurrentlyHolding[4] >= minimumDMwool      && !resourcesWantedDMtrade[4]) { resourcesWillingToGiveDMtrade[4] = true; }
+            else if (resourcesCurrentlyHolding[1] - 2 >= minimumDMgrain && !resourcesWantedDMtrade[1]) { resourcesWillingToGiveDMtrade[1] = true; }
+            else if (resourcesCurrentlyHolding[3] - 3 >= minimumDMore   && !resourcesWantedDMtrade[3]) { resourcesWillingToGiveDMtrade[3] = true; }
+        }
+        else if (pieceToBuild == "dev card")
+        {
+            if      (resourcesCurrentlyHolding[0] >= minimumDMbrick     && !resourcesWantedDMtrade[0]) { resourcesWillingToGiveDMtrade[0] = true; }
+            else if (resourcesCurrentlyHolding[2] >= minimumDMlumber    && !resourcesWantedDMtrade[2]) { resourcesWillingToGiveDMtrade[2] = true; }
+            else if (resourcesCurrentlyHolding[1] - 1 >= minimumDMgrain && !resourcesWantedDMtrade[1]) { resourcesWillingToGiveDMtrade[1] = true; }
+            else if (resourcesCurrentlyHolding[3] - 1 >= minimumDMore   && !resourcesWantedDMtrade[3]) { resourcesWillingToGiveDMtrade[3] = true; }
+            else if (resourcesCurrentlyHolding[4] - 1 >= minimumDMwool  && !resourcesWantedDMtrade[4]) { resourcesWillingToGiveDMtrade[4] = true; }
+        }
+        else if (pieceToBuild == "any")
+        {
+            int cardHighest = -1;
+            for (int i=0; i<5; i++)
+            {
+                if(resourcesCurrentlyHolding[i] > cardHighest) { cardHighest = i; }
+            }
+            if      (resourcesCurrentlyHolding[0] >= minimumDMbrick  && cardHighest == 0) { resourcesWillingToGiveDMtrade[0] = true; }
+            else if (resourcesCurrentlyHolding[1] >= minimumDMgrain  && cardHighest == 1) { resourcesWillingToGiveDMtrade[1] = true; }
+            else if (resourcesCurrentlyHolding[2] >= minimumDMlumber && cardHighest == 2) { resourcesWillingToGiveDMtrade[2] = true; }
+            else if (resourcesCurrentlyHolding[3] >= minimumDMore    && cardHighest == 3) { resourcesWillingToGiveDMtrade[3] = true; }
+            else if (resourcesCurrentlyHolding[4] >= minimumDMwool   && cardHighest == 4) { resourcesWillingToGiveDMtrade[4] = true; }
+        }
+
+        for (int i = 0; i< 5; i++)
+        {
+            if (resourcesWillingToGiveDMtrade[i]) { return true; }
+        }
+        return false;
+    }
+
+    private bool IsPlayerTradePossible(int[] resourcesCurrentlyHolding, string pieceToBuild)
+    {
+        if (pieceToBuild == "settlement")
+        {
+            if      (resourcesCurrentlyHolding[3] > 0     && resourcesWantedPtrade[3] == 0) { resourcesWillingToGivePtrade[3] = 1; }
+            else if (resourcesCurrentlyHolding[0] - 1 > 0 && resourcesWantedPtrade[0] == 0) { resourcesWillingToGivePtrade[0] = 1; }
+            else if (resourcesCurrentlyHolding[1] - 1 > 0 && resourcesWantedPtrade[1] == 0) { resourcesWillingToGivePtrade[1] = 1; }
+            else if (resourcesCurrentlyHolding[2] - 1 > 0 && resourcesWantedPtrade[2] == 0) { resourcesWillingToGivePtrade[2] = 1; }
+            else if (resourcesCurrentlyHolding[4] - 1 > 0 && resourcesWantedPtrade[4] == 0) { resourcesWillingToGivePtrade[4] = 1; }
+        }
+        else if (pieceToBuild == "road")
+        {
+            if      (resourcesCurrentlyHolding[1] > 0     && resourcesWantedPtrade[1] == 0) { resourcesWillingToGivePtrade[1] = 1; }
+            else if (resourcesCurrentlyHolding[3] > 0     && resourcesWantedPtrade[3] == 0) { resourcesWillingToGivePtrade[3] = 1; }
+            else if (resourcesCurrentlyHolding[4] > 0     && resourcesWantedPtrade[4] == 0) { resourcesWillingToGivePtrade[4] = 1; }
+            else if (resourcesCurrentlyHolding[0] - 1 > 0 && resourcesWantedPtrade[0] == 0) { resourcesWillingToGivePtrade[0] = 1; }
+            else if (resourcesCurrentlyHolding[2] - 1 > 0 && resourcesWantedPtrade[2] == 0) { resourcesWillingToGivePtrade[2] = 1; }
+        }
+        else if (pieceToBuild == "city")
+        {
+            if      (resourcesCurrentlyHolding[0] > 0     && resourcesWantedPtrade[0] == 0) { resourcesWillingToGivePtrade[0] = 1; }
+            else if (resourcesCurrentlyHolding[2] > 0     && resourcesWantedPtrade[2] == 0) { resourcesWillingToGivePtrade[2] = 1; }
+            else if (resourcesCurrentlyHolding[4] > 0     && resourcesWantedPtrade[4] == 0) { resourcesWillingToGivePtrade[4] = 1; }
+            else if (resourcesCurrentlyHolding[1] - 2 > 0 && resourcesWantedPtrade[1] == 0) { resourcesWillingToGivePtrade[1] = 1; }
+            else if (resourcesCurrentlyHolding[3] - 3 > 0 && resourcesWantedPtrade[3] == 0) { resourcesWillingToGivePtrade[3] = 1; }
+        }
+        else if (pieceToBuild == "dev card")
+        {
+            if      (resourcesCurrentlyHolding[0] > 0     && resourcesWantedPtrade[0] == 0) { resourcesWillingToGivePtrade[0] = 1; }
+            else if (resourcesCurrentlyHolding[2] > 0     && resourcesWantedPtrade[2] == 0) { resourcesWillingToGivePtrade[2] = 1; }
+            else if (resourcesCurrentlyHolding[1] - 1 > 0 && resourcesWantedPtrade[1] == 0) { resourcesWillingToGivePtrade[1] = 1; }
+            else if (resourcesCurrentlyHolding[3] - 1 > 0 && resourcesWantedPtrade[3] == 0) { resourcesWillingToGivePtrade[3] = 1; }
+            else if (resourcesCurrentlyHolding[4] - 1 > 0 && resourcesWantedPtrade[4] == 0) { resourcesWillingToGivePtrade[4] = 1; }
+        }
+        else if (pieceToBuild == "any")
+        {
+            int cardHighest = -1;
+            int highestCount = 0;
+            for (int i = 0; i < 5; i++)
+            {
+                if (resourcesCurrentlyHolding[i] > highestCount) { cardHighest = i; }
+            }
+            print(cardHighest);
+            if      (resourcesCurrentlyHolding[0] > 0 && cardHighest == 0) { resourcesWillingToGivePtrade[0] = 1; }
+            else if (resourcesCurrentlyHolding[1] > 0 && cardHighest == 1) { resourcesWillingToGivePtrade[1] = 1; }
+            else if (resourcesCurrentlyHolding[2] > 0 && cardHighest == 2) { resourcesWillingToGivePtrade[2] = 1; }
+            else if (resourcesCurrentlyHolding[3] > 0 && cardHighest == 3) { resourcesWillingToGivePtrade[3] = 1; }
+            else if (resourcesCurrentlyHolding[4] > 0 && cardHighest == 4) { resourcesWillingToGivePtrade[4] = 1; }
+        }
+
+        for (int i = 0; i < 5; i++)
+        {
+            if (resourcesWillingToGivePtrade[i] > 0) { return true; }
+        }
+        return false;
+    }
+
+    //----------------------------------------------------------------------------------------
+    //dealing with any decisions that need to be made as a result of a dev card (mainly year of plenty and monopoly)
+    public int ChooseResourceForMonopolyOrYopCard(int[] resourcesCurrentlyHolding)
+    {
+        if (aiSetting == "Random") { return Random.RandomRange(1, 6); }
+
+        if      (resourcesCurrentlyHolding[0]     < 1  && (priority == "settlement" || priority == "road")) { return 1; }
+        else if ((resourcesCurrentlyHolding[1]    < 1  && (priority == "settlement" || priority == "dev card")) 
+                || (resourcesCurrentlyHolding[1]  < 2  &&  priority == "city")) { return 2; }
+        else if (resourcesCurrentlyHolding[2]     < 1  && (priority == "settlement" || priority == "road")) { return 3; }
+        else if ((resourcesCurrentlyHolding[3]    < 1  &&  priority == "dev card")  || (resourcesCurrentlyHolding[3] < 3 && priority == "city")) { return 4; }
+        else if (resourcesCurrentlyHolding[4]     < 1  && (priority == "settlement" || priority == "dev card")) { return 5; }
+
+        else return Random.RandomRange(1, 6);
+    }
+
+    //----------------------------------------------------------------------------------------
+    //select trade methods
+    public int SelectDomesticMaritimeResourceToGive()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            if (resourcesWillingToGiveDMtrade[i]) { return i + 1; }
+        }
+        return -1;
+    }
+
+    public int SelectDomesticMaritimeResourceToGet()
+    {
+        if (aiSetting == "Random")
+        {
+            int g = Random.RandomRange(0, 5);
+            print(g);
+            while (resourcesWillingToGiveDMtrade[g]) { g = Random.RandomRange(0, 5); print(g); }
+            return g + 1;
+        }
+        for (int i = 0; i < 5; i++)
+        {
+            if (resourcesWantedDMtrade[i]) { return i + 1; }
+        }
+        return -1;
+    }
+
+    public int[] SelectPlayerTradeToGive()
+    {
+        int[] resourcesGiven = new int[5];
+        for (int i = 0; i < 5; i++)
+        {
+            resourcesGiven[i] = resourcesWillingToGivePtrade[i];
+        }
+        return resourcesGiven;
+    }
+
+    public int[] SelectPlayerTradeToWant()
+    {
+        int[] playerResourcesWanted = new int[5];
+        for (int i = 0; i < 5; i++) { playerResourcesWanted[i] = 0; }
+        if (aiSetting == "Random")
+        {
+            int g = Random.RandomRange(0, 5);
+            while (resourcesWillingToGivePtrade[g] != 0) { g = Random.RandomRange(0, 5); }
+            for (int i = 0; i < 5; i++)
+            {
+                if (g == i) { playerResourcesWanted[i] = 1; }
+                else        { playerResourcesWanted[i] = 0; }
+            }
+            return playerResourcesWanted;
+        }
+        for (int i = 0; i < 5; i++)
+        {
+            playerResourcesWanted[i] = resourcesWantedPtrade[i];
+        }
+        return playerResourcesWanted;
+    }
+
+    public int SelectPlayerToTradeWith(List<int> listOfPeopleToTradeWith)
+    {
+        int size = listOfPeopleToTradeWith.Count;
+        if (aiSetting == "Random") { return listOfPeopleToTradeWith[Random.RandomRange(0, size)]; }
+        else if (aiSetting == "Quick Thinker")
+        {
+            for (int i = 1; i < listOfPeopleToTradeWith.Count; i++)
+            {
+                int p = 0;
+                if(listOfPeopleToTradeWith[i] == playerNumber) { p = listOfPeopleToTradeWith[i] + 1; }
+                else { p = listOfPeopleToTradeWith[i]; }
+
+                if (!ScoreBoard.DoesPlayerHaveHighestTotalScore(p)) { return listOfPeopleToTradeWith[i]; }
+            }
+            return listOfPeopleToTradeWith[Random.RandomRange(0, size)];
+        }
+        return 0;
+    }
+
+    public int SelectResponseToTrade(int[] resourcesCurrentlyHolding, int offeringPlayer)
+    {
+        if (aiSetting == "Random") { return Random.RandomRange(0, 2); }
+        else if (aiSetting == "Quick Thinker")
+        {
+            if (ScoreBoard.DoesPlayerHaveHighestTotalScore(offeringPlayer)) { return 0; }
+            else { return 1; }
+        }
+        else return 0;
+    }
+
+    //-----------------------------------------------------------------------------
+    //select placement methods
+    public GameObject SelectSettlementPlacement(List<GameObject> listOfValidSettlementSpots)
+    {
+        int size = listOfValidSettlementSpots.Count;
+        if      (aiSetting == "Random")        { return listOfValidSettlementSpots[Random.Range(0, size)]; }
+        else if (aiSetting == "Quick Thinker") { return listOfValidSettlementSpots[PickSettlementCitySpotFromWeights(listOfValidSettlementSpots,true)]; }
+        else { return null; }
+    }
+
+    public GameObject SelectRoadPlacement(List<GameObject> listOfValidRoadSpots)
+    {
+        int size = listOfValidRoadSpots.Count;
+        if      (aiSetting == "Random")        { return listOfValidRoadSpots[Random.Range(0, size)]; }
+        else if (aiSetting == "Quick Thinker") { return listOfValidRoadSpots[PickRoadSpotFromWeights(listOfValidRoadSpots)]; }
+        else { return listOfValidRoadSpots[Random.Range(0, size)]; }
+    }
+
+    public GameObject SelectCityPlacement(List<GameObject> listOfValidCitySpots)
+    {
+        int size = listOfValidCitySpots.Count;
+        if      (aiSetting == "Random")        { return listOfValidCitySpots[Random.Range(0, size)]; }
+        else if (aiSetting == "Quick Thinker") { return listOfValidCitySpots[PickSettlementCitySpotFromWeights(listOfValidCitySpots, false)]; }
+        else { return listOfValidCitySpots[Random.Range(0, size)]; }
+    }
+
+    public GameObject SelectNewRobberLocation(List<GameObject> listOfValidRobberSpots)
+    {
+        int size = listOfValidRobberSpots.Count;
+        if (aiSetting == "Random") { return listOfValidRobberSpots[Random.Range(0, size)]; }
+        else if (aiSetting == "Quick Thinker") { return listOfValidRobberSpots[PickRobberSpotFromWeights(listOfValidRobberSpots)]; }
+        else { return listOfValidRobberSpots[Random.Range(0, size)]; }
+    }
+
+    //------------------------------------------------------------------------
+    //methods that gets the weights
+    private int PickSettlementCitySpotFromWeights(List<GameObject> listOfValidSpots, bool isSettlementPlacement)
+    {
+        int highestWeight = 0;
+        List<int> highestWeightedSpots = new List<int>();
+        for(int i=0; i<listOfValidSpots.Count; i++)
+        {
+            int w = board.GetWeightForSettlementCitySpot(listOfValidSpots[i], resourcesWanted, isSettlementPlacement);
+            if(w > highestWeight)
+            {
+                highestWeightedSpots.RemoveRange(0, highestWeightedSpots.Count);
+                highestWeight = w;
+                highestWeightedSpots.Add(i);
+            }
+            else if(w == highestWeight)
+            {
+                highestWeightedSpots.Add(i);
+            }
+        }
+        if (highestWeightedSpots.Count > 1) { return highestWeightedSpots[Random.RandomRange(0, highestWeightedSpots.Count)]; }
+        else { return highestWeightedSpots[0]; }
+    }
+
+    private int PickRoadSpotFromWeights(List<GameObject> listOfValidRoadSpots)
+    {
+        int highestWeight = 0;
+        List<int> highestWeightedSpots = new List<int>();
+        for (int i = 0; i < listOfValidRoadSpots.Count; i++)
+        {
+            int w = board.GetWeightForRoadSpot(listOfValidRoadSpots[i], resourcesWanted, playerNumber, priority);
+            if (w > highestWeight)
+            {
+                highestWeightedSpots.RemoveRange(0, highestWeightedSpots.Count);
+                highestWeight = w;
+                highestWeightedSpots.Add(i);
+            }
+            else if (w == highestWeight)
+            {
+                highestWeightedSpots.Add(i);
+            }
+        }
+        if (highestWeightedSpots.Count > 1) { return highestWeightedSpots[Random.RandomRange(0, highestWeightedSpots.Count)]; }
+        else { return highestWeightedSpots[0]; }
+    }
+
+    private int PickRobberSpotFromWeights(List<GameObject> listOfValidRobberSpots)
+    {
+        int highestWeight = 0;
+        List<int> highestWeightedSpots = new List<int>();
+
+        for (int i = 0; i < listOfValidRobberSpots.Count; i++)
+        {
+            int w = board.GetWeightForRobberSpot(listOfValidRobberSpots[i],playerNumber);
+            if (w > highestWeight)
+            {
+                highestWeightedSpots.RemoveRange(0, highestWeightedSpots.Count);
+                highestWeight = w;
+                highestWeightedSpots.Add(i);
+            }
+            else if (w == highestWeight)
+            {
+                highestWeightedSpots.Add(i);
+            }
+        }
+        if (highestWeightedSpots.Count > 1) { return highestWeightedSpots[Random.RandomRange(0, highestWeightedSpots.Count)]; }
+        else { return highestWeightedSpots[0]; }
+    }
+
+}
